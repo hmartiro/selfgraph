@@ -13,7 +13,7 @@ def format_basic(s_in):
 def format_address(field):
 
     f = format_basic(field)
-    f = re.sub('[\n\r\t\"]', '', f)
+    f = re.sub('[\n\r\t\"\']', '', f)
     f = f.split(',')
     f = [entry.strip().lower() for entry in f]
 

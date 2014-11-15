@@ -92,7 +92,6 @@ if __name__ == '__main__':
 
     import sys
 
-    print(sys.argv[1])
     mbox_file = sys.argv[1]
 
     ep = EmailParser(mbox_file)
