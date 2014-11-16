@@ -28,7 +28,7 @@ def load_data(filename):
         'cc': 2,
         'bcc': 3
     }
-    categories = {
+    relation = {
         'UNKNOWN': 0,
         'FRIEND': 1,
         'COWORKER': 2,
@@ -37,16 +37,22 @@ def load_data(filename):
         'NEWSLETTER': 5
     }
 
+    message_type = {
+        'email': 0,
+        'sms': 1
+    }
+
     msg_dict = {}
     word_dict = {}
     person_dict = {}
     word_heard = {}
+    person_relation = {}
 
     batch = neo4j.WriteBatch(graph_db)
     for m in data:
         # create message
         msg = {
-            'category': categories['UNKNOWN'],
+            'category': message_type['email'],
             'text': m['text'],
             'date': m['date'],
             'uuid': hash(m['text'] + m['date'])
@@ -66,7 +72,7 @@ def load_data(filename):
 
             if word_node is None:
                 logging.debug('Created new Word(value={})'.format(word))
-                word_node = batch.create(node({'value': word}))
+                word_node = batch.create(node({'value': word, 'active': True}))
                 word_dict.update({word: word_node})
                 batch.add_labels(word_node, "Word")
 
@@ -84,6 +90,8 @@ def load_data(filename):
             batch.add_labels(from_person, "Person")
         batch.create(rel(from_person, ("ROLE", {'role': role['from']}), msg_node))
 
+        if person_relation.get(from_person_name) is None:
+            person_relation.update({from_person_name: set()})
         # find or add all the to, cc & bcc people
         # build relationship to current message
         to_people = []
@@ -98,6 +106,16 @@ def load_data(filename):
 
                 batch.create(rel(person, ("ROLE", {'role': role[field]}), msg_node))
                 to_people.append(address)
+
+                # collect all person to person relationships
+                current_person_relation = person_relation.get(address)
+                if current_person_relation is None:
+                    person_relation[from_person_name].add(address)
+                else:
+                    if current_person_relation.issuperset(set([from_person_name])):
+                        pass
+                    else:
+                        person_relation[from_person_name].add(address)
 
         # collect all the heard words and there frequencies
         for word in message_words:
@@ -130,6 +148,13 @@ def load_data(filename):
             for said_person in people_who_said:
                 frequency = people_who_said.get(said_person)
                 batch.create(rel(heard_person_id, ("HEARD", {'frequency': frequency, 'name': said_person}), word_id))
+
+    # create all person to person relationships
+    for from_person in person_relation:
+        from_person_id = person_dict.get(from_person)
+        for to_person in person_relation[from_person]:
+            to_person_id = person_dict.get(to_person)
+            batch.create(rel(from_person_id, ("RELATION", {'category': relation['UNKNOWN']}), to_person_id))
 
     # submit the batch
     batch.submit()
