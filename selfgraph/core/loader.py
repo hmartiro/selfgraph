@@ -7,6 +7,7 @@ import logging
 from collections import Counter
 from py2neo import neo4j, node, rel
 
+
 def load_data(filename):
     """
     Creates Messages, People, and Roles for the given file.
@@ -29,12 +30,12 @@ def load_data(filename):
         'bcc': 3
     }
     relation = {
-        'UNKNOWN': 0,
-        'FRIEND': 1,
-        'COWORKER': 2,
-        'ACQUAINTANCE': 3,
-        'FAMILY': 4,
-        'NEWSLETTER': 5
+        'unkown': 0,
+        'friend': 1,
+        'coworker': 2,
+        'acquaintance': 3,
+        'family': 4,
+        'newslatter': 5
     }
 
     message_type = {
@@ -154,7 +155,7 @@ def load_data(filename):
         from_person_id = person_dict.get(from_person)
         for to_person in person_relation[from_person]:
             to_person_id = person_dict.get(to_person)
-            batch.create(rel(from_person_id, ("RELATION", {'category': relation['UNKNOWN']}), to_person_id))
+            batch.create(rel(from_person_id, ("RELATION", {'category': relation['unkown']}), to_person_id))
 
     # submit the batch
     batch.submit()

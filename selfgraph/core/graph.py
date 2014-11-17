@@ -38,23 +38,23 @@ class Contains(StructuredRel):
 class Relation(StructuredRel):
 
     CATEGORIES = {
-        'UNKNOWN': 0,
-        'FRIEND': 1,
-        'COWORKER': 2,
-        'ACQUAINTANCE': 3,
-        'FAMILY': 4,
-        'NEWSLETTER': 5
+        'unkown': 0,
+        'friend': 1,
+        'coworker': 2,
+        'acquaintance': 3,
+        'family': 4,
+        'newsletter': 5
     }
-    category = IntegerProperty(default=CATEGORIES['UNKNOWN'])
+    category = IntegerProperty(default=CATEGORIES['unkown'])
 
 
 class Role(StructuredRel):
 
     CATEGORIES = {
-        'TO': 0,
-        'FROM': 1,
-        'CC': 2,
-        'BCC': 3
+        'to': 0,
+        'from': 1,
+        'cc': 2,
+        'bcc': 3
     }
     category = IntegerProperty()
 
@@ -79,6 +79,13 @@ class Person(StructuredNode):
         except cls.DoesNotExist:
             logging.debug('Created new Person(name={})'.format(address))
             return Person(address=address)
+
+    @classmethod
+    def get(cls, word):
+        try:
+            return cls.nodes.get(value=word)
+        except cls.DoesNotExist:
+            return None
 
 
 class Message(StructuredNode):
@@ -120,3 +127,10 @@ class Word(StructuredNode):
         except cls.DoesNotExist:
             logging.debug('Created new Word(value={})'.format(word))
             return Word(value=word)
+
+    @classmethod
+    def get(cls, word):
+        try:
+            return cls.nodes.get(value=word)
+        except cls.DoesNotExist:
+            return None
