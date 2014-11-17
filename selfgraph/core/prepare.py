@@ -5,6 +5,8 @@
 import logging
 
 import statistics
+import re
+import csv
 from neomodel import db
 from .graph import Word, Heard, Person
 from .graph import *
@@ -93,7 +95,7 @@ def build_testing_matrix(words, freq, people, distinct_people):
 
 
 def build_training_and_testing_sets(person_name):
-    percent_training = 0.4
+    percent_training = 0.7
     select_words()
     heard_words, query_items = db.cypher_query('match (w:Word)-[h:HEARD]-(p:Person) where w.active = true AND '
                                                'p.address={} return w.value, '
@@ -112,24 +114,28 @@ def build_training_and_testing_sets(person_name):
                                                           distinct_people[testing_range[0]:testing_range[-1]])
 
     # output training matrix to file
-    train_filename = '{}.TRAIN'.format(person_name)
-    with open(train_filename, 'w+') as train_file:
-        train_file.writelines(["%s " % item for item in training_relation])
-        train_file.write('\n')
-        for entry in training_dict:
-            train_file.write("%s " % entry)
-            train_file.writelines(["%s " % item for item in training_dict[entry]])
-            train_file.write('\n')
+    train_filename = '{}.TRAIN'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
+    with open(train_filename, 'w') as train_file:
+        writer = csv.writer(train_file, delimiter=' ',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(["%s " % person for person in distinct_people[training_range[0]:training_range[-1]]])
+        writer.writerow(["%s " % entry for entry in training_dict])
+        for i in range(len(training_relation)):
+            row = [training_dict[entry][i] for entry in training_dict]
+            row.insert(0, training_relation[i])
+            writer.writerow(row)
 
     # output testing matrix to file
-    test_filename = '{}.TEST'.format(person_name)
-    with open(test_filename, 'w+') as test_file:
-        test_file.writelines(["%s " % item for item in testing_relation])
-        test_file.write('\n')
-        for entry in testing_dict:
-            test_file.write("%s " % entry)
-            test_file.writelines(["%s " % item for item in testing_dict[entry]])
-            test_file.write('\n')
+    test_filename = '{}.TEST'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
+    with open(test_filename, 'w') as test_file:
+        writer = csv.writer(test_file, delimiter=' ',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(["%s " % person for person in distinct_people[testing_range[0]:testing_range[-1]]])
+        writer.writerow(["%s " % entry for entry in testing_dict])
+        for i in range(len(testing_relation)):
+            row = [training_dict[entry][i] for entry in testing_dict]
+            row.insert(0, testing_relation[i])
+            writer.writerow(row)
 
 if __name__ == '__main__':
 
