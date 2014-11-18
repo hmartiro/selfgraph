@@ -3,12 +3,81 @@
 """
 
 import yaml
+import hashlib
 import logging
 from collections import Counter
 from py2neo import neo4j, node, rel
+from py2neo.neo4j import Node, Record
+
+from .categories import ROLES, RELATIONS, MESSAGES
+
+graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
+
+BATCH_SIZE = 350
 
 
-def load_data(filename):
+def md5sum(data):
+    return hashlib.md5(data.encode()).digest()
+
+
+def merge_nodes(nodes):
+    """
+    :param nodes: List of (label, properties) tuples.
+    """
+
+    batch = neo4j.WriteBatch(graph_db)
+    merges = [
+        "MERGE (n%d:%s {%s})" % (
+            i,
+            node[0],
+            ', '.join(['{}: \'{}\''.format(k, v) for k, v in node[1].items()])
+        ) for i, node in enumerate(nodes)]
+
+    query = ' \n'.join(merges)
+    query += ' \nRETURN {};'.format(', '.join(
+        ['n{}'.format(i) for i in range(len(nodes))]
+    ))
+
+    batch.append_cypher(query)
+    return batch.submit()
+
+
+def merge_nodes_in_batches(nodes_data):
+    ret_nodes = []
+    for i in range(len(nodes_data))[::BATCH_SIZE]:
+        batch_args = nodes_data[i:i+BATCH_SIZE]
+        ret = merge_nodes(batch_args)
+        if type(ret[0]) == Record:
+            ret_nodes.extend(ret[0].values)
+        else:
+            ret_nodes.append(ret[0])
+    return ret_nodes
+
+
+def get_or_create_relationships_in_batches(rels_data):
+    ret_rels = []
+    for i in range(len(rels_data))[::BATCH_SIZE]:
+        batch_args = rels_data[i:i+BATCH_SIZE]
+        ret = get_or_create_relationships(batch_args)
+        if type(ret) == list:
+            ret_rels.extend(ret)
+        else:
+            ret_rels.append(ret)
+    return ret_rels
+
+
+def get_or_create_relationships(relationships):
+    """
+    :param edges: List of (start_node, type, end_node, properties).
+    """
+
+    batch = neo4j.WriteBatch(graph_db)
+    for r_data in relationships:
+        batch.create(rel(r_data))
+    return batch.submit()
+
+
+def load_data(data, range_inx=None):
     """
     Creates Messages, People, and Roles for the given file.
 
@@ -16,155 +85,139 @@ def load_data(filename):
           - add in proper error handling
 
     """
+    logging.info('Total messages in file: {}'.format(len(data)))
+    if range_inx:
+        data = data[range_inx[0]:range_inx[1]]
+    logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    with open(filename) as file:
-        data = yaml.load(file.read())
-
-    graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
     graph_db.clear()
 
-    role = {
-        'to': 0,
-        'from': 1,
-        'cc': 2,
-        'bcc': 3
-    }
-    relation = {
-        'unkown': 0,
-        'friend': 1,
-        'coworker': 2,
-        'acquaintance': 3,
-        'family': 4,
-        'newslatter': 5
-    }
+    messages_to_merge = set()
+    words_to_merge = set()
+    people_to_merge = set()
+    roles_to_merge = set()
+    relations_to_merge = set()
+    heards_to_merge = set()
 
-    message_type = {
-        'email': 0,
-        'sms': 1
-    }
-
-    msg_dict = {}
-    word_dict = {}
-    person_dict = {}
-    word_heard = {}
-    person_relation = {}
-
-    batch = neo4j.WriteBatch(graph_db)
     for m in data:
-        # create message
-        msg = {
-            'category': message_type['email'],
-            'text': m['text'],
-            'date': m['date'],
-            'uuid': hash(m['text'] + m['date'])
-        }
 
-        logging.debug('Created new Message(uuid={})'.format(msg['uuid']))
-        msg_node = batch.create(node(msg))
-        msg_dict.update({msg['uuid']: msg_node})
-        batch.add_labels(msg_dict[msg['uuid']], "Message")
+        # Queue all Message data
+        msg_data = (
+            MESSAGES['email'],
+            m['date'],
+            m['text'],
+            #md5sum(m['text'] + m['date'])
+        )
+        messages_to_merge.add(msg_data)
+        logging.info('Processing message of length {}'.format(len(m['text'])))
 
-        # create or find all words in message
-        words = Counter(m['text'].split())
-        message_words = {}
-        for word, freq in words.items():
-            logging.debug('Parsing word {}: {}'.format(word, freq))
-            word_node = word_dict.get(word)
+        # Queue all Word data
+        word_freqs = Counter(m['text'].split())
+        words = set(word_freqs.keys())
+        words_to_merge.update(words)
+        # logging.info('Words in message: {}'.format(words))
 
-            if word_node is None:
-                logging.debug('Created new Word(value={})'.format(word))
-                word_node = batch.create(node({'value': word, 'active': True}))
-                word_dict.update({word: word_node})
-                batch.add_labels(word_node, "Word")
+        # Queue all People data
+        people = set(m['to'] + m['from'] + m['cc'] + m['bcc'])
+        people_to_merge.update(people)
+        logging.info('People in message: {}'.format(people))
 
-            batch.create(rel(msg_node, ("CONTAINS", {'frequency': freq}), word_node))
-            message_words.update({word: freq})
+        # Queue all CONTAINS relationships
+        # TODO do we even need these?
 
-        # find or add the from person
-        # build relationship to current message
-        from_person_name = m['from'][0]
-        from_person = person_dict.get(from_person_name)
-        if from_person is None:
-            logging.debug('Created new person(address={})'.format(from_person_name))
-            from_person = batch.create(node({'address': from_person_name}))
-            person_dict.update({from_person_name: from_person})
-            batch.add_labels(from_person, "Person")
-        batch.create(rel(from_person, ("ROLE", {'role': role['from']}), msg_node))
+        # Queue all ROLE relationships
+        roles = [(
+            person,
+            ROLES[field],
+            msg_data
+        ) for field in ['to', 'from', 'cc', 'bcc'] for person in m[field]]
+        roles_to_merge.update(roles)
+        # logging.info('Roles in message: {}'.format(roles))
 
-        if person_relation.get(from_person_name) is None:
-            person_relation.update({from_person_name: set()})
-        # find or add all the to, cc & bcc people
-        # build relationship to current message
-        to_people = []
-        for field in ['to', 'cc', 'bcc']:
-            for address in m[field]:
-                person = person_dict.get(address)
-                if person is None:
-                    logging.debug('Created new person(address={})'.format(address))
-                    person = batch.create(node({'address': address}))
-                    person_dict.update({address: person})
-                    batch.add_labels(person, "Person")
+        # Queue all RELATION relationships
+        from_person = m['from'][0]
+        to_people = m['to'] + m['cc'] + m['bcc']
+        relations = [(
+            from_person,
+            RELATIONS['unknown'],
+            person
+        ) for person in to_people]
+        relations_to_merge.update(relations)
+        # logging.info('Relations in message: {}'.format(relations))
 
-                batch.create(rel(person, ("ROLE", {'role': role[field]}), msg_node))
-                to_people.append(address)
+        # Queue all HEARD relationships
+        heards = [(
+            to_person,
+            freq,
+            from_person,
+            word
+        ) for word, freq in word_freqs.items() for to_person in to_people]
+        heards_to_merge.update(heards)
+        # logging.info('Heards in message: {}'.format(heards))
 
-                # collect all person to person relationships
-                current_person_relation = person_relation.get(address)
-                if current_person_relation is None:
-                    person_relation[from_person_name].add(address)
-                else:
-                    if current_person_relation.issuperset(set([from_person_name])):
-                        pass
-                    else:
-                        person_relation[from_person_name].add(address)
+    messages_to_merge_data = [('Message', {
+        'category': category,
+        'date': date,
+        'text': text,
+        #'uuid': uuid
+    }) for category, date, text in messages_to_merge]
 
-        # collect all the heard words and there frequencies
-        for word in message_words:
-            for person in to_people:
-                logging.debug('Creating new heard relationship between person:{} and word:{}'.format(person, word))
-                freq = message_words[word]
-                if word_heard.get(word) is None:
-                    word_heard.update({word: {person: {from_person_name: freq}}})
-                else:
-                    if word_heard[word].get(person) is None:
-                        word_heard[word].update({person: {from_person_name: freq}})
-                    else:
-                        if word_heard[word][person].get(from_person_name) is None:
-                            word_heard[word][person].update({from_person_name: freq})
-                        else:
-                            old_freq = word_heard[word][person][from_person_name]
-                            word_heard[word][person].update({from_person_name: freq+old_freq})
+    words_to_merge_data = [('Word', {
+        'value': word
+    }) for word in words_to_merge]
 
-    # create all the heard relationships
-    for word in word_heard:
-        word_id = word_dict.get(word)
-        if word_id is None:
-            logging.debug('Error word:{} id not found'.format(word))
-        people_who_heard = word_heard.get(word)
-        for heard_person in people_who_heard:
-            heard_person_id = person_dict.get(heard_person)
-            if heard_person_id is None:
-                logging.debug('Error person:{} id not found'.format(heard_person))
-            people_who_said = people_who_heard.get(heard_person)
-            for said_person in people_who_said:
-                frequency = people_who_said.get(said_person)
-                batch.create(rel(heard_person_id, ("HEARD", {'frequency': frequency, 'name': said_person}), word_id))
+    people_to_merge_data = [('Person', {
+        'address': address
+    }) for address in people_to_merge]
 
-    # create all person to person relationships
-    for from_person in person_relation:
-        from_person_id = person_dict.get(from_person)
-        for to_person in person_relation[from_person]:
-            to_person_id = person_dict.get(to_person)
-            batch.create(rel(from_person_id, ("RELATION", {'category': relation['unkown']}), to_person_id))
+    message_nodes = merge_nodes_in_batches(messages_to_merge_data)
+    message_dict = dict(zip(messages_to_merge, message_nodes))
 
-    # submit the batch
-    batch.submit()
+    word_nodes = merge_nodes_in_batches(words_to_merge_data)
+    word_dict = dict(zip(words_to_merge, word_nodes))
+
+    person_nodes = merge_nodes_in_batches(people_to_merge_data)
+    person_dict = dict(zip(people_to_merge, person_nodes))
+
+    roles_to_merge_data = [(
+        person_dict[person],
+        'ROLE',
+        message_dict[message],
+        {'category': role}
+    ) for person, role, message in roles_to_merge]
+    role_nodes = get_or_create_relationships_in_batches(roles_to_merge_data)
+    role_dict = dict(zip(roles_to_merge, role_nodes))
+
+    relations_to_merge_data = [(
+        person_dict[from_person],
+        'RELATION',
+        person_dict[to_person],
+        {'category': category}
+    ) for from_person, category, to_person in relations_to_merge]
+    relation_nodes = get_or_create_relationships_in_batches(relations_to_merge_data)
+    relation_dict = dict(zip(relations_to_merge, relation_nodes))
+
+    heards_to_merge_data = [(
+        person_dict[to_person],
+        'HEARD',
+        word_dict[word],
+        {'frequency': freq, 'name': from_person}
+    ) for to_person, freq, from_person, word in heards_to_merge]
+    heard_nodes = get_or_create_relationships_in_batches(heards_to_merge_data)
+    heard_dict = dict(zip(heards_to_merge, heard_nodes))
+
 
 if __name__ == '__main__':
 
     import sys
+    import pickle
 
     in_file = sys.argv[1]
-    load_data(in_file)
 
+    range_inx = None
+    if len(sys.argv) == 4:
+        range_inx = [int(sys.argv[2]), int(sys.argv[3])]
 
+    with open(in_file, 'rb') as file:
+        messages = pickle.loads(file.read())
+        load_data(messages, range_inx=range_inx)

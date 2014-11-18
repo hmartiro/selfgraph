@@ -8,6 +8,8 @@ from neomodel import StructuredNode, StructuredRel
 from neomodel import RelationshipTo, RelationshipFrom, Relationship
 from neomodel import IntegerProperty, FloatProperty, StringProperty, BooleanProperty
 
+from .categories import ROLES, RELATIONS, MESSAGES
+
 
 class Heard(StructuredRel):
 
@@ -37,25 +39,13 @@ class Contains(StructuredRel):
 
 class Relation(StructuredRel):
 
-    CATEGORIES = {
-        'unkown': 0,
-        'friend': 1,
-        'coworker': 2,
-        'acquaintance': 3,
-        'family': 4,
-        'newsletter': 5
-    }
+    CATEGORIES = RELATIONS
     category = IntegerProperty(default=CATEGORIES['unkown'])
 
 
 class Role(StructuredRel):
 
-    CATEGORIES = {
-        'to': 0,
-        'from': 1,
-        'cc': 2,
-        'bcc': 3
-    }
+    CATEGORIES = ROLES
     category = IntegerProperty()
 
 
@@ -90,12 +80,9 @@ class Person(StructuredNode):
 
 class Message(StructuredNode):
 
-    CATEGORIES = {
-        'email': 0,
-        'sms': 1
-    }
+    CATEGORIES = MESSAGES
 
-    uuid = IntegerProperty(required=True)
+    #uuid = StringProperty(required=True)
     category = IntegerProperty(required=True)
     processed = BooleanProperty(default=False)
     date = StringProperty()
