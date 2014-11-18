@@ -40,7 +40,7 @@ class Contains(StructuredRel):
 class Relation(StructuredRel):
 
     CATEGORIES = RELATIONS
-    category = IntegerProperty(default=CATEGORIES['unkown'])
+    category = IntegerProperty(default=CATEGORIES['unknown'])
 
 
 class Role(StructuredRel):

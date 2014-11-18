@@ -135,7 +135,11 @@ def load_data(data, range_inx=None):
         # logging.info('Roles in message: {}'.format(roles))
 
         # Queue all RELATION relationships
-        from_person = m['from'][0]
+        try:
+            from_person = m['from'][0]
+        except IndexError:
+            continue
+
         to_people = m['to'] + m['cc'] + m['bcc']
         relations = [(
             from_person,
