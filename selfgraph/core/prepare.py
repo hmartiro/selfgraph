@@ -14,12 +14,13 @@ from .graph import Word, Heard, Person
 from .graph import *
 
 
-def select_words():
+def select_words(person_name):
 
     # find all words and total frequency
     min_freq = 3
     stdev_weight = 3
-    words, query_items = db.cypher_query('match (w:Word)-[h:HEARD]-(p:Person) return w.value, count(h.frequency)')
+    words, query_items = db.cypher_query('match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' return w.value, '
+                                         'count(h.frequency)'.format(person_name))
 
     words_to_remove = []
 
@@ -117,7 +118,7 @@ def build_testing_matrix(words, freq, people, distinct_people):
 def build_training_and_testing_sets(person_name):
 
     percent_training = 0.7
-    select_words()
+    select_words(person_name)
 
     heard_recv, query_items = db.cypher_query(
         'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and '
