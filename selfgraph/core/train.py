@@ -43,7 +43,7 @@ def naive_bayes(words, friends, acquaintances, num_people):
     num_friend_words = sum([1 if i else 0 for i in friends])
     ttl_num_friend_words = sum(friends)
 
-    num_acquaint_words = sum([1 if i else 0 for i in friends])
+    num_acquaint_words = sum([1 if i else 0 for i in acquaintances])
     ttl_num_acquaint_words = sum(acquaintances)
 
     friend_prior = math.log(num_friend_words / num_people)

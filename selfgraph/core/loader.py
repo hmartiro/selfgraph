@@ -5,6 +5,7 @@
 import yaml
 import hashlib
 import logging
+import random
 from collections import Counter
 from py2neo import neo4j, node, rel
 from py2neo.neo4j import Node, Record
@@ -13,7 +14,8 @@ from .categories import ROLES, RELATIONS, MESSAGES
 
 graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
 
-BATCH_SIZE = 350
+BATCH_SIZE = 500
+MAX_WORDS_PER_MESSAGE = 1000
 
 
 def md5sum(data):
@@ -81,9 +83,6 @@ def load_data(data, range_inx=None):
     """
     Creates Messages, People, and Roles for the given file.
 
-    TODO: - clean things up and make it standardized
-          - add in proper error handling
-
     """
     logging.info('Total messages in file: {}'.format(len(data)))
     if range_inx:
@@ -112,7 +111,10 @@ def load_data(data, range_inx=None):
         logging.info('Processing message of length {}'.format(len(m['text'])))
 
         # Queue all Word data
-        word_freqs = Counter(m['text'].split())
+        # Take a max fixed number of random words
+        random_words = m['text'].split()
+        random.shuffle(random_words)
+        word_freqs = Counter(random_words[:MAX_WORDS_PER_MESSAGE])
         words = set(word_freqs.keys())
         words_to_merge.update(words)
         # logging.info('Words in message: {}'.format(words))
@@ -167,7 +169,8 @@ def load_data(data, range_inx=None):
     }) for category, date, text in messages_to_merge]
 
     words_to_merge_data = [('Word', {
-        'value': word
+        'value': word,
+        'active': True
     }) for word in words_to_merge]
 
     people_to_merge_data = [('Person', {

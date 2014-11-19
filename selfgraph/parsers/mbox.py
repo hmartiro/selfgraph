@@ -91,9 +91,11 @@ class EmailParser():
 if __name__ == '__main__':
 
     import sys
+    import pickle
 
     mbox_file = sys.argv[1]
 
     ep = EmailParser(mbox_file)
     data = ep.parse()
+    #print(pickle.dumps(data))
     print(yaml.dump(data, width=10000))

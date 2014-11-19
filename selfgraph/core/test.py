@@ -50,7 +50,11 @@ if __name__ == '__main__':
     words, friend_words, acquaint_words, num_people = matrix_read_train(train_name)
     friend_phi, friend_prior, acquaint_phi, acquaint_prior = naive_bayes(words, friend_words,
                                                                          acquaint_words, num_people)
-
+    print('friend_phi: {}'.format(friend_phi))
+    print('friend_prior: {}'.format(friend_prior))
+    print('acquaint_phi: {}'.format(acquaint_phi))
+    print('acquaint_prior: {}'.format(acquaint_prior))
+    #sys.exit(1)
     test_name = sys.argv[2]
     word_list, people_list, frequency_matrix = matrix_read_test(test_name)
     test_naive_bayes(word_list, people_list, frequency_matrix, friend_phi, friend_prior, acquaint_phi, acquaint_prior)

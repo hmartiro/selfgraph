@@ -17,11 +17,12 @@ from .graph import *
 def select_words(person_name):
 
     # find all words and total frequency
-    min_freq = 3
-    stdev_weight = 3
-    words, query_items = db.cypher_query('match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' return w.value, '
-                                         'count(h.frequency)'.format(person_name))
-
+    min_freq = 20
+    stdev_weight = 6
+    words, query_items = db.cypher_query('match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' '
+                                         'OR h.name = \'{}\' return w.value, '
+                                         'count(h.frequency)'.format(person_name, person_name))
+    print(words)
     words_to_remove = []
 
     # remove words with freq too low
@@ -31,27 +32,51 @@ def select_words(person_name):
         word_freq = word[1]
         ttl_freq_list.append(word_freq)
         if word_freq < min_freq:
-            words.remove(word)
+            #words.remove(word)
             words_to_remove.append(word[0])
+            logging.info('Removing word, freq < {}: {}'.format(
+                min_freq,
+                word[0]
+            ))
         else:
             appended_freq_list.append(word_freq)
-
+    print(words)
     # find mean of words
     stdev = statistics.stdev(ttl_freq_list)
     mean = statistics.mean(appended_freq_list)
 
-    logging.debug('stdev:{} and mean:{}'.format(stdev, mean))
+    logging.info('stdev:{} and mean:{}'.format(stdev, mean))
 
     # remove words with freq too high
     for word in list(words):
         word_freq = word[1]
-        if word_freq > mean+stdev_weight*stdev:
-            words.remove(word)
+        max_freq = mean+stdev_weight*stdev
+        if word_freq > max_freq:
+            #words.remove(word)
             words_to_remove.append(word[0])
+            logging.info('Removing word, freq > {}: {}'.format(
+                max_freq,
+                word[0]
+            ))
+
+    print('TO REMOVE, {} words: {}'.format(
+        len(words_to_remove), words_to_remove))
+    print('ALL, {} words: {}'.format(
+        len(words), words))
+
+    word_vals = [w[0] for w in words]
 
     # Deactivate words in DB
     word_nodes_dict = {n.value: n for n in Word.nodes.all()}
     for word, word_node in word_nodes_dict.items():
+
+        if word not in word_vals:
+            continue
+
+        # if word == 'streaming':
+        #     print('HERE')
+        #     sys.exit(1)
+
         state = not word in words_to_remove
         logging.debug('Word: {}, New: {}, Old: {}'.format(
             word, state, word_node.active
@@ -132,13 +157,13 @@ def build_training_and_testing_sets(person_name):
         'h.frequency, p.address'.format(person_name)
     )
 
-    logging.info('Unique words, sent only: {}'.format(len(heard_sent)))
-    logging.info('Unique words, received only: {}'.format(len(heard_recv)))
+    logging.info('All words, sent only: {}'.format(len(heard_sent)))
+    logging.info('All words, received only: {}'.format(len(heard_recv)))
 
     # Merge operation
     heard_words = heard_recv + heard_sent
     heard_words.sort()
-    logging.info('Unique words, combined: {}'.format(len(heard_words)))
+    logging.info('All words, combined: {}'.format(len(heard_words)))
 
     for i in range(len(heard_words)-1):
         if heard_words[i] == heard_words[i-1]:
@@ -148,6 +173,8 @@ def build_training_and_testing_sets(person_name):
 
     # Deduplicate list, frequencies already added
     heard_words = list(set(tuple(word) for word in heard_words))
+
+    logging.info('Unique words: {}'.format(len(list(set([w[0] for w in heard_words])))))
 
     words, freq, people = list(zip(*heard_words))
     distinct_people = list(set(people))
