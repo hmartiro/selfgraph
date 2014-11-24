@@ -94,8 +94,12 @@ if __name__ == '__main__':
     import pickle
 
     mbox_file = sys.argv[1]
-
-    ep = EmailParser(mbox_file)
+    if(len(sys.argv) > 2):
+        out_file = '{}.pickle'.format(sys.argv[2])
+    else:
+        out_file = '{}.pickle'.format(mbox_file)
+    ep = EmailParser('{}.mbox'.format(mbox_file))
     data = ep.parse()
-    #print(pickle.dumps(data))
-    print(yaml.dump(data, width=10000))
+    with open(out_file, 'wb') as f:
+        f.write(pickle.dumps(data))
+    #print(yaml.dump(data, width=10000))
