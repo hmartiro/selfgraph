@@ -9,6 +9,7 @@ import random
 from collections import Counter
 from py2neo import neo4j, node, rel
 from py2neo.neo4j import Node, Record
+from nltk.stem.snowball import SnowballStemmer
 
 from .categories import ROLES, RELATIONS, MESSAGES
 
@@ -99,7 +100,7 @@ def load_data(data, range_inx=None):
     heards_to_merge = set()
 
     for m in data:
-
+        print(m)
         # Queue all Message data
         msg_data = (
             MESSAGES['email'],
@@ -112,7 +113,10 @@ def load_data(data, range_inx=None):
 
         # Queue all Word data
         # Take a max fixed number of random words
-        random_words = m['text'].split()
+        random_plural_words = m['text'].split()
+        random_words = []
+        for word in random_plural_words:
+            random_words.append(SnowballStemmer("english").stem(word))
         random.shuffle(random_words)
         word_freqs = Counter(random_words[:MAX_WORDS_PER_MESSAGE])
         words = set(word_freqs.keys())
