@@ -2,12 +2,12 @@
 
 """
 
-from selfgraph.algorithms import SVM, naive_bayes
+from selfgraph.algorithms import linearSVC, naive_bayes
 
 
 def train_naive_bayes(train_name):
     words, friend_words, acquaint_words, num_people = naive_bayes.import_train_CSV(train_name)
-    friend_phi, friend_prior, acquaint_phi, acquaint_prior = naive_bayes.train_naive_bayes(words, friend_words,
+    friend_phi, friend_prior, acquaint_phi, acquaint_prior = naive_bayes.train(words, friend_words,
                                                                                            acquaint_words, num_people)
 
     print('friend_phi: {}'.format(friend_phi))
@@ -17,8 +17,8 @@ def train_naive_bayes(train_name):
 
 
 def train_SVM(train_name):
-    people_list, word_list, X, Y = SVM.import_CSV(train_name)
-    clf = SVM.train_SVM(X, Y)
+    people_list, word_list, X, Y = linearSVC.import_CSV(train_name)
+    clf = linearSVC.train(X, Y)
 
 
 if __name__ == '__main__':

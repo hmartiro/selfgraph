@@ -1,7 +1,8 @@
 import csv
 from sklearn import svm
 
-def SVM_matrix_read(file_name):
+
+def import_CSV(file_name):
     Y = []
     X = []
     matrix = []
@@ -20,15 +21,22 @@ def SVM_matrix_read(file_name):
     return people_list, word_list, X, Y
 
 
-def SVM(X, Y):
+def train(X, Y):
     clf = svm.SVC()
     clf.fit(X, Y)
 
     return clf
 
-def test_SVM(clf, X):
+
+def test(clf, X):
     predicted_Y = clf.predict(X)
 
-def print_SVM_results(people, test_results):
-    for p, t in people, test_results:
-        print("{} is a {}".format(p, t))
+    return predicted_Y
+
+
+def output_results(people, test_results):
+    for x in zip(people, test_results):
+        if x[1] == '1':
+            print("{} is a friend".format(x[0]))
+        elif x[1] == '3':
+            print("{} is an acquaintance".format(x[0]))
