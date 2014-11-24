@@ -15,7 +15,7 @@ def test_naive_bayes(train_name, test_name):
     print('acquaint_phi: {}'.format(acquaint_phi))
     print('acquaint_prior: {}'.format(acquaint_prior))
 
-    word_list, people_list, frequency_matrix = naive_bayes.import_read_CSV(test_name)
+    word_list, people_list, frequency_matrix = naive_bayes.import_test_CSV(test_name)
     friend_prob, acquaint_prob = naive_bayes.test(frequency_matrix, friend_phi, friend_prior,
                                                               acquaint_phi, acquaint_prior)
 

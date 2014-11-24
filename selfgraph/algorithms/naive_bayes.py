@@ -34,7 +34,7 @@ def import_train_CSV(file_name):
     return word_list, friend, acquaint, len(frequency)
 
 
-def import_read_CSV(file_name):
+def import_test_CSV(file_name):
     matrix = []
     with open(file_name, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
