@@ -18,7 +18,7 @@ def train_naive_bayes(train_name):
 
 def train_SVM(train_name):
     people_list, word_list, X, Y = linearSVC.import_CSV(train_name)
-    clf = linearSVC.train(X, Y)
+    lin_clf = linearSVC.train(X, Y)
 
 
 if __name__ == '__main__':

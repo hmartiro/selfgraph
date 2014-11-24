@@ -22,14 +22,14 @@ def import_CSV(file_name):
 
 
 def train(X, Y):
-    clf = svm.SVC()
-    clf.fit(X, Y)
+    lin_clf = svm.LinearSVC()
+    lin_clf.fit(X, Y)
 
-    return clf
+    return lin_clf
 
 
-def test(clf, X):
-    predicted_Y = clf.predict(X)
+def test(lin_clf, X):
+    predicted_Y = lin_clf.predict(X)
 
     return predicted_Y
 

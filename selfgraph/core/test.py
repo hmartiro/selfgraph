@@ -24,10 +24,10 @@ def test_naive_bayes(train_name, test_name):
 
 def test_SVM(train_name, test_name):
     people_list, word_list, X, Y = linearSVC.import_CSV(train_name)
-    clf = linearSVC.train(X, Y)
+    lin_clf = linearSVC.train(X, Y)
 
     people_list, word_list, X_test, Y_test = linearSVC.import_CSV(test_name)
-    Y_test = linearSVC.test(clf, X_test)
+    Y_test = linearSVC.test(lin_clf, X_test)
     linearSVC.output_results(people_list, Y_test)
 
 
