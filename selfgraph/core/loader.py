@@ -90,7 +90,7 @@ def load_data(data, range_inx=None):
         data = data[range_inx[0]:range_inx[1]]
     logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    graph_db.clear()
+    # graph_db.clear()
 
     messages_to_merge = set()
     words_to_merge = set()

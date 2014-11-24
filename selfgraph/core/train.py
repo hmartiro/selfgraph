@@ -24,7 +24,7 @@ def train_SVM(train_name):
 if __name__ == '__main__':
     import sys
 
-    algo_names = ['nb', 'linSVM']
+    algo_names = ['nb', 'linSVC']
 
     if(len(sys.argv) != 3):
         print("Error! Wrong number of input arguments. \n"
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     if algorithm == 'nb':
         train_naive_bayes(train_name)
-    elif algorithm == 'linSVM':
+    elif algorithm == 'linSVC':
         train_SVM(train_name)
     else:
         print("{} is not a valid algorithm name. Valid names are: {}".format(', '.join(algo_names)))

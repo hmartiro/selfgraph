@@ -88,11 +88,11 @@ def select_words(person_name):
             word, state, word_node.active
         ))
 
-        if word_node.active != state:
-            word_node.active = state
-            word_node.save()
-        else:
-            logging.debug('States are the same!')
+        # if word_node.active != state:
+        #     word_node.active = state
+        #     word_node.save()
+        #else:
+        #    logging.debug('States are the same!')
 
         if state:
             activated += 1
@@ -140,10 +140,20 @@ def create_word_people_freq(words, freq, people, distinct_people):
     return word_dict
 
 
-def build_training_matrix(words, freq, people, distinct_people):
+def build_training_matrix(words, freq, people, distinct_people, person_name):
 
-    # Get correct labels by prompting user
-    relation = [train_people(p) for p in distinct_people]
+    # TODO get relation by querying database
+    query_str = 'match (p:Person {{address: \'{}\'}})-[r:RELATION]-(p1:Person) ' \
+                'return r, p1'.format(person_name)
+    print(query_str)
+    result, query_items = db.cypher_query(query_str)
+    result = [[Relation.inflate(d[0]), Person.inflate(d[1])] for d in result]
+
+    person_relations = {}
+    for relation, person in result:
+        person_relations[person.address] = relation.category
+
+    relation = [person_relations[p] for p in distinct_people]
 
     return create_word_people_freq(words, freq, people, distinct_people), relation
 
@@ -160,9 +170,14 @@ def build_training_and_testing_sets(person_name):
     query_str = \
         'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
         '(p.address=\'{}\' or h.name=\'{}\') ' \
-        'return w.value, h.frequency, h.name, p.address'.format(person_name, person_name)
-    heard_words, query_items = db.cypher_query(query_str)
+        'return w, h, p'.format(person_name, person_name)
+    heard_data, query_items = db.cypher_query(query_str)
 
+    # Inflate data
+    heard_data = [[Word.inflate(d[0]), Heard.inflate(d[1]), Person.inflate(d[2])] for d in heard_data]
+
+    # w.value, h.frequency, h.name, p.address
+    heard_words = [[d[0].value, d[1].frequency, d[1].name, d[2].address] for d in heard_data]
     heard_words = [[w[0], w[1], (w[2] if w[3] == person_name else w[3])] for w in heard_words]
     logging.info('build training query:\n{}'.format(query_str))
 
@@ -200,7 +215,7 @@ def build_training_and_testing_sets(person_name):
 
     training_dict, training_relation = build_training_matrix(
         words, freq, people,
-        distinct_people[:training_inx]
+        distinct_people[:training_inx], person_name
     )
 
     testing_dict, testing_relation = build_testing_matrix(
