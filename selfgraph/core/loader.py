@@ -113,15 +113,16 @@ def load_data(data, range_inx=None):
 
         # Queue all Word data
         # Take a max fixed number of random words
+        stemmer = SnowballStemmer("english")
         random_plural_words = m['text'].split()
         random_words = []
         for word in random_plural_words:
-            random_words.append(SnowballStemmer("english").stem(word))
+            random_words.append(stemmer.stem(word))
         random.shuffle(random_words)
         word_freqs = Counter(random_words[:MAX_WORDS_PER_MESSAGE])
         words = set(word_freqs.keys())
         words_to_merge.update(words)
-        # logging.info('Words in message: {}'.format(words))
+        #logging.info('Words in message: {}'.format(words))
 
         # Queue all People data
         people = set(m['to'] + m['from'] + m['cc'] + m['bcc'])
@@ -216,7 +217,6 @@ def load_data(data, range_inx=None):
     ) for to_person, freq, from_person, word in heards_to_merge]
     heard_nodes = get_or_create_relationships_in_batches(heards_to_merge_data)
     heard_dict = dict(zip(heards_to_merge, heard_nodes))
-
 
 if __name__ == '__main__':
 

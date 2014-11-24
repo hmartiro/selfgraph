@@ -121,3 +121,16 @@ class Word(StructuredNode):
             return cls.nodes.get(value=word)
         except cls.DoesNotExist:
             return None
+
+    @staticmethod
+    def set_state(word_nodes, state):
+        if len(word_nodes) == 0:
+            return
+        query_str = 'MATCH (w:Word) where {} set w.active = {}'.format(
+            ' or '.join(['w.value = \'{}\''.format(n.value) for n in word_nodes]),
+            str(state)
+        )
+        print(query_str)
+        db.cypher_query(query_str)
+        # import sys
+        # sys.exit(1)

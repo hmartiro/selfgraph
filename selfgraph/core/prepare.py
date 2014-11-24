@@ -17,76 +17,88 @@ from .graph import *
 def select_words(person_name):
 
     # find all words and total frequency
-    min_freq = 20
+    min_freq = 5
     stdev_weight = 6
-    words, query_items = db.cypher_query('match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' '
-                                         'OR h.name = \'{}\' return w.value, '
-                                         'count(h.frequency)'.format(person_name, person_name))
-    print(words)
-    words_to_remove = []
 
+    query_str = 'match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' ' \
+                'OR h.name = \'{}\' return w.value, ' \
+                'sum(h.frequency)'.format(person_name, person_name)
+    words, query_items = db.cypher_query(query_str)
+
+    logging.info('Unique words: {}'.format(len(words)))
+    logging.info('Total uses: {}'.format(sum(w[1] for w in words)))
+
+    words_freq_too_low = []
     # remove words with freq too low
     appended_freq_list = []
-    ttl_freq_list = []
     for word in list(words):
         word_freq = word[1]
-        ttl_freq_list.append(word_freq)
         if word_freq < min_freq:
-            #words.remove(word)
-            words_to_remove.append(word[0])
-            logging.info('Removing word, freq < {}: {}'.format(
+            words_freq_too_low.append(word)
+            logging.debug('Removing word, freq < {}: {}'.format(
                 min_freq,
                 word[0]
             ))
         else:
             appended_freq_list.append(word_freq)
-    print(words)
+
+    print('TO REMOVE, freq < {}, {} words: {}\n\n'.format(
+        min_freq, len(words_freq_too_low), [w[0] for w in words_freq_too_low]))
+
     # find mean of words
-    stdev = statistics.stdev(ttl_freq_list)
+    stdev = statistics.stdev(w[1] for w in words)
     mean = statistics.mean(appended_freq_list)
 
     logging.info('stdev:{} and mean:{}'.format(stdev, mean))
 
     # remove words with freq too high
+    max_freq = mean + stdev_weight*stdev
+    words_freq_too_high = []
     for word in list(words):
         word_freq = word[1]
-        max_freq = mean+stdev_weight*stdev
         if word_freq > max_freq:
-            #words.remove(word)
-            words_to_remove.append(word[0])
-            logging.info('Removing word, freq > {}: {}'.format(
+            words_freq_too_high.append(word)
+            logging.debug('Removing word, freq > {}: {}'.format(
                 max_freq,
                 word[0]
             ))
 
-    print('TO REMOVE, {} words: {}'.format(
-        len(words_to_remove), words_to_remove))
-    print('ALL, {} words: {}'.format(
-        len(words), words))
+    print('TO REMOVE, freq > {}, {} words: {}\n\n'.format(
+        max_freq, len(words_freq_too_high), [w[0] for w in words_freq_too_high]))
 
-    word_vals = [w[0] for w in words]
+    words_to_remove = words_freq_too_high + words_freq_too_low
+
+    word_vals = sorted([w[0] for w in words])
+    words_to_remove_vals = sorted([w[0] for w in words_to_remove])
+
+    words_to_keep_vals = sorted(set(word_vals).difference(set(words_to_remove_vals)))
+    print('TO KEEP, {} words: {}\n\n'.format(
+        len(words_to_keep_vals), words_to_keep_vals))
 
     # Deactivate words in DB
     word_nodes_dict = {n.value: n for n in Word.nodes.all()}
+    activated = 0
     for word, word_node in word_nodes_dict.items():
 
         if word not in word_vals:
             continue
 
-        # if word == 'streaming':
-        #     print('HERE')
-        #     sys.exit(1)
-
-        state = not word in words_to_remove
+        state = not word in words_to_remove_vals
         logging.debug('Word: {}, New: {}, Old: {}'.format(
             word, state, word_node.active
         ))
+
         if word_node.active != state:
             word_node.active = state
             word_node.save()
+        else:
+            logging.debug('States are the same!')
 
-    logging.debug('Removed words: {}'.format(words_to_remove))
-    logging.debug('Important Words: {}'.format(words))
+        if state:
+            activated += 1
+            logging.debug('Words active: {}'.format(activated))
+
+    logging.info('Query string for select_words:\n{}'.format(query_str))
 
     return words
 
@@ -145,34 +157,30 @@ def build_training_and_testing_sets(person_name):
     percent_training = 0.7
     select_words(person_name)
 
-    heard_recv, query_items = db.cypher_query(
-        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and '
-        'p.address=\'{}\' return w.value, '
-        'h.frequency, h.name'.format(person_name)
-    )
+    query_str = \
+        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
+        '(p.address=\'{}\' or h.name=\'{}\') ' \
+        'return w.value, h.frequency, h.name, p.address'.format(person_name, person_name)
+    heard_words, query_items = db.cypher_query(query_str)
 
-    heard_sent, query_items = db.cypher_query(
-        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and '
-        'h.name=\'{}\' return w.value, '
-        'h.frequency, p.address'.format(person_name)
-    )
+    heard_words = [[w[0], w[1], (w[2] if w[3] == person_name else w[3])] for w in heard_words]
+    logging.info('build training query:\n{}'.format(query_str))
 
-    logging.info('All words, sent only: {}'.format(len(heard_sent)))
-    logging.info('All words, received only: {}'.format(len(heard_recv)))
+    logging.info('All heards: {}'.format(len(heard_words)))
 
     # Merge operation
-    heard_words = heard_recv + heard_sent
     heard_words.sort()
-    logging.info('All words, combined: {}'.format(len(heard_words)))
 
     for i in range(len(heard_words)-1):
         if heard_words[i] == heard_words[i-1]:
+            logging.debug('Merge: {}, {}'.format(heard_words[i], heard_words[i-1]))
             heard_words[i][1] += heard_words[i-1][1]
             heard_words[i-1][1] = heard_words[i][1]
-            logging.debug('Merge: {}, {}'.format(heard_words[i], heard_words[i-1]))
 
     # Deduplicate list, frequencies already added
     heard_words = list(set(tuple(word) for word in heard_words))
+
+    logging.info('Unique heards: {}'.format(len(heard_words)))
 
     logging.info('Unique words: {}'.format(len(list(set([w[0] for w in heard_words])))))
 

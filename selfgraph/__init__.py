@@ -6,4 +6,4 @@ __license__ = 'MIT'
 __copyright__ = '2014 {}'.format(', '.join(__authors__))
 
 import logging
-logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO)
+logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.DEBUG)
