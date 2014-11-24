@@ -2,61 +2,51 @@
 
 """
 
-import logging
-import csv
-from .graph import Relation
-import operator
-import math
-from .train import *
+from selfgraph.algorithms import SVM, naive_bayes
 
 
-def matrix_read_test(file_name):
-    matrix = []
-    with open(file_name, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
-        for row in reader:
-            matrix.append(row)
+def test_naive_bayes(train_name, test_name):
+    words, friend_words, acquaint_words, num_people = naive_bayes.import_train_CSV(train_name)
+    friend_phi, friend_prior, acquaint_phi, acquaint_prior = naive_bayes.train_naive_bayes(words, friend_words,
+                                                                                          acquaint_words, num_people)
 
-    people = matrix[0]
-    word = matrix[1]
-    frequency = []
-    for i in range(2, len(matrix)):
-        frequency.append(list(map(int, matrix[i])))
+    print('friend_phi: {}'.format(friend_phi))
+    print('friend_prior: {}'.format(friend_prior))
+    print('acquaint_phi: {}'.format(acquaint_phi))
+    print('acquaint_prior: {}'.format(acquaint_prior))
 
-    return word, people, frequency
+    word_list, people_list, frequency_matrix = naive_bayes.import_read_CSV(test_name)
+    friend_prob, acquaint_prob = naive_bayes.test_naive_bayes(frequency_matrix, friend_phi, friend_prior,
+                                                              acquaint_phi, acquaint_prior)
+
+    naive_bayes.output_results(friend_prob, acquaint_prob, people_list)
 
 
-def test_naive_bayes(words, people, frequency, friend_phi, friend_prior, acquaint_phi, acquaint_prior):
-    ttl_num_words = len(words)
+def test_SVM(train_name, test_name):
+    people_list, word_list, X, Y = SVM.import_CSV(train_name)
+    clf = SVM.train_SVM(X, Y)
 
-    for i in range(len(frequency)):
-        friend_prob = sum(list(map(operator.mul, frequency[i], friend_phi))) + friend_prior
-        acquaint_prob = sum(list(map(operator.mul, frequency[i], acquaint_phi))) + acquaint_prior
-
-        print(friend_prior)
-        print(acquaint_prior)
-        if(friend_prob > acquaint_prob):
-            print("{} is a friend with {} to {}".format(people[i], friend_prob, acquaint_prob))
-        elif(friend_prob < acquaint_prob):
-            print("{} is a acquaintance with {} to {}".format(people[i], acquaint_prob, friend_prob))
-        else:
-            print("Can not decide relationship for {}".format(people[i]))
+    people_list, word_list, X_test, Y_test = SVM.import_CSV(test_name)
+    Y_test = SVM.test_SVM(clf, X_test)
+    SVM.output_results(people_list, Y_test)
 
 
 if __name__ == '__main__':
     import sys
 
-    train_name = sys.argv[1]
-    words, friend_words, acquaint_words, num_people = matrix_read_train(train_name)
-    friend_phi, friend_prior, acquaint_phi, acquaint_prior = naive_bayes(words, friend_words,
-                                                                         acquaint_words, num_people)
-    print('friend_phi: {}'.format(friend_phi))
-    print('friend_prior: {}'.format(friend_prior))
-    print('acquaint_phi: {}'.format(acquaint_phi))
-    print('acquaint_prior: {}'.format(acquaint_prior))
-    #sys.exit(1)
-    test_name = sys.argv[2]
-    word_list, people_list, frequency_matrix = matrix_read_test(test_name)
-    test_naive_bayes(word_list, people_list, frequency_matrix, friend_phi, friend_prior, acquaint_phi, acquaint_prior)
+    algo_names = ['nb', 'linSVM']
 
+    if(len(sys.argv) != 4):
+        print("Error! Wrong number of input arguments. \n"
+              "USAGE: train.py [TRAIN TYPE: {}] [TRAIN FILENAME] [TEST FILENAME".format(', '.join(algo_names)))
 
+    algorithm = sys.argv[1]
+    train_name = sys.argv[2]
+    test_name = sys.argv[3]
+
+    if algorithm == 'nb':
+        test_naive_bayes(train_name, test_name)
+    elif algorithm == 'linSVM':
+        test_SVM(train_name, test_name)
+    else:
+        print("{} is not a valid algorithm name. Valid names are: {}".format(', '.join(algo_names)))
