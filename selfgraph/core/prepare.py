@@ -10,8 +10,8 @@ import csv
 from pprint import pprint
 
 from neomodel import db
-from .graph import Word, Heard, Person
-from .graph import *
+from selfgraph.core.graph import *
+from selfgraph.utils.csv import import_csv, export_csv
 
 
 def select_words(person_name):
@@ -89,8 +89,8 @@ def select_words(person_name):
         ))
 
         # if word_node.active != state:
-        #     word_node.active = state
-        #     word_node.save()
+        word_node.active = state
+        word_node.save()
         #else:
         #    logging.debug('States are the same!')
 
@@ -142,7 +142,6 @@ def create_word_people_freq(words, freq, people, distinct_people):
 
 def build_training_matrix(words, freq, people, distinct_people, person_name):
 
-    # TODO get relation by querying database
     query_str = 'match (p:Person {{address: \'{}\'}})-[r:RELATION]-(p1:Person) ' \
                 'return r, p1'.format(person_name)
     print(query_str)
@@ -201,7 +200,6 @@ def build_training_and_testing_sets(person_name):
 
     words, freq, people = list(zip(*heard_words))
     distinct_people = list(set(people))
-    logging.debug('Distict people: {}'.format(distinct_people))
 
     # find test and training matrices
     training_inx = round(len(distinct_people)*percent_training)
@@ -210,42 +208,69 @@ def build_training_and_testing_sets(person_name):
         training_inx,
         len(distinct_people) - training_inx
     ))
-    logging.debug('Training people: {}'.format(distinct_people[:training_inx]))
-    logging.debug('Testing people: {}'.format(distinct_people[training_inx:]))
+
+    train_people_list = distinct_people[:training_inx]
+    test_people_list = distinct_people[training_inx:]
+
+    logging.debug('Training people: {}'.format(train_people_list))
+    logging.debug('Testing people: {}'.format(test_people_list))
 
     training_dict, training_relation = build_training_matrix(
         words, freq, people,
-        distinct_people[:training_inx], person_name
+        train_people_list, person_name
     )
 
     testing_dict, testing_relation = build_testing_matrix(
         words, freq, people,
-        distinct_people[training_inx:]
+        test_people_list
     )
-
+    print(list(zip(*training_dict.values())))
     # output training matrix to file
     train_filename = '{}.TRAIN'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
-    with open(train_filename, 'w') as train_file:
-        writer = csv.writer(train_file, delimiter=' ',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(["%s " % person for person in distinct_people[:training_inx]])
-        writer.writerow(["%s " % entry for entry in training_dict])
-        for i in range(len(training_relation)):
-            row = [training_dict[entry][i] for entry in training_dict]
-            row.insert(0, training_relation[i])
-            writer.writerow(row)
-
+    export_csv(
+        filename=train_filename,
+        person=person_name,
+        word_list=list(training_dict.keys()),
+        people_list=train_people_list,
+        X=list(zip(*training_dict.values())),
+        Y=training_relation
+    )
     # output testing matrix to file
     test_filename = '{}.TEST'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
-    with open(test_filename, 'w') as test_file:
-        writer = csv.writer(test_file, delimiter=' ',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(["%s " % person for person in distinct_people[training_inx:]])
-        writer.writerow(["%s " % entry for entry in testing_dict])
-        for i in range(len(testing_relation)):
-            row = [training_dict[entry][i] for entry in testing_dict]
-            row.insert(0, testing_relation[i])
-            writer.writerow(row)
+    export_csv(
+        filename=test_filename,
+        person=person_name,
+        word_list=list(testing_dict.keys()),
+        people_list=test_people_list,
+        X=list(zip(*testing_dict.values())),
+        Y=testing_relation
+    )
+
+    # # output training matrix to file
+    # train_filename = '{}.TRAIN'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
+    # with open(train_filename, 'w') as train_file:
+    #     writer = csv.writer(train_file, delimiter=' ',
+    #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    #     writer.writerow([person_name])
+    #     writer.writerow(["%s " % entry for entry in training_dict])
+    #     writer.writerow(["%s " % person for person in distinct_people[:training_inx]])
+    #     for i in range(len(training_relation)):
+    #         row = [training_dict[entry][i] for entry in training_dict]
+    #         row.insert(0, training_relation[i])
+    #         writer.writerow(row)
+    #
+    # # output testing matrix to file
+    # test_filename = '{}.TEST'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
+    # with open(test_filename, 'w') as test_file:
+    #     writer = csv.writer(test_file, delimiter=' ',
+    #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    #     writer.writewrow([person_name])
+    #     writer.writerow(["%s " % entry for entry in testing_dict])
+    #     writer.writerow(["%s " % person for person in distinct_people[training_inx:]])
+    #     for i in range(len(testing_relation)):
+    #         row = [training_dict[entry][i] for entry in testing_dict]
+    #         row.insert(0, testing_relation[i])
+    #         writer.writerow(row)
 
 if __name__ == '__main__':
 

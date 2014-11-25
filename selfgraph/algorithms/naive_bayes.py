@@ -2,111 +2,123 @@ import logging
 import csv
 import operator
 import math
-from selfgraph.core.graph import Relation
+from selfgraph.core.categories import RELATIONS
+from selfgraph.utils.csv import import_csv
 
 
 def import_train_CSV(file_name):
-    matrix = []
-    with open(file_name, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
-        for row in reader:
-            matrix.append(row)
 
-    people_list = matrix[0]
-    word_list = matrix[1]
-    frequency = []
-    for i in range(2, len(matrix)):
-        frequency.append(list(map(int, matrix[i])))
+    person, word_list, people_list, X, Y = import_csv(file_name)
 
-    options = {}
-    options.update({'acquaintance': Relation.CATEGORIES['acquaintance']})
-    options.update({'friend': Relation.CATEGORIES['friend']})
+    options = dict(
+        acquaintance=RELATIONS['acquaintance'],
+        friend=RELATIONS['friend']
+    )
 
-    friend = [0]*len(frequency[0])
-    acquaint = [0]*len(frequency[0])
-    print(options['friend'])
-    for row in frequency:
-        if row[0] == options['friend']:
-            friend = list(map(operator.add, friend, row))
-        if row[0] == options['acquaintance']:
-            acquaint = list(map(operator.add, acquaint, row))
+    word_freq_friends = [0]*len(X[0])
+    word_freq_acquaints = [0]*len(X[0])
 
-    return word_list, friend, acquaint, len(frequency)
+    for x, y in zip(X, Y):
+        if y == options['friend']:
+            word_freq_friends = list(map(operator.add, word_freq_friends, x))
+        if y == options['acquaintance']:
+            word_freq_acquaints = list(map(operator.add, word_freq_acquaints, x))
+
+    return person, word_list, word_freq_friends, word_freq_acquaints, Y
 
 
 def import_test_CSV(file_name):
-    matrix = []
-    with open(file_name, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
-        for row in reader:
-            matrix.append(row)
 
-    people = matrix[0]
-    word = matrix[1]
-    frequency = []
-    for i in range(2, len(matrix)):
-        frequency.append(list(map(int, matrix[i])))
+    person, word_list, people_list, X, Y = import_csv(file_name)
 
-    return word, people, frequency
+    # matrix = []
+    # with open(file_name, 'r') as csvfile:
+    #     reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+    #     for row in reader:
+    #         matrix.append(row)
+    #
+    # people = matrix[0]
+    # word = matrix[1]
+    # frequency = []
+    # for i in range(2, len(matrix)):
+    #     frequency.append(list(map(int, matrix[i])))
+
+    return word_list, people_list, X
 
 
-def train(words, friends, acquaintances, num_people):
+def train(words, word_freq_friends, word_freq_acquaints, Y):
+
+    # Size of vocabulary
     ttl_num_words = len(words)
 
-    num_friend_words = sum([1 if i else 0 for i in friends])
-    ttl_num_friend_words = sum(friends)
+    # Total words said between friends vs acquaintances
+    ttl_num_friend_words = sum(word_freq_friends)
+    ttl_num_acquaint_words = sum(word_freq_acquaints)
 
-    num_acquaint_words = sum([1 if i else 0 for i in acquaintances])
-    ttl_num_acquaint_words = sum(acquaintances)
+    print(Y)
+    num_people = len(Y)
+    num_friends = sum(y == RELATIONS['friend'] for y in Y)
+    num_acquaints = sum(y == RELATIONS['acquaintance'] for y in Y)
+    print('Num people: {}, friends: {}, acquaintances: {}'.format(
+        num_people, num_friends, num_acquaints
+    ))
 
-    friend_prior = math.log(num_friend_words / num_people)
-    acquaint_prior = math.log(num_acquaint_words / num_people)
+    phi_friend = num_friends / num_people
+    phi_acquaint = num_acquaints / num_people
 
-    friend_phi = []
-    acquaint_phi = []
+    phi_k_friend = []
+    phi_k_acquaint = []
     for i in range(len(words)):
-        friend_phi.append(math.log((friends[i]+1)/(ttl_num_friend_words + ttl_num_words)))
-        acquaint_phi.append(math.log((acquaintances[i]+1)/(ttl_num_acquaint_words + ttl_num_words)))
 
-    # print top friend words
-    logging.debug("Friend words")
-    old_i = 0
-    for i in sorted(friend_phi)[:5]:
-        if i == old_i:
-            continue
-        old_i = i
-        index = [k for k, v in enumerate(friend_phi) if v == i]
-        for j in index:
-            logging.debug("{} {}".format(words[j], i))
+        phi_k_friend.append(
+            math.log(
+                (word_freq_friends[i] + 1) / (ttl_num_friend_words + ttl_num_words)
+            )
+        )
+        phi_k_acquaint.append(
+            math.log(
+                (word_freq_acquaints[i] + 1) / (ttl_num_acquaint_words + ttl_num_words)
+            )
+        )
 
-    # print top acquaint words
-    logging.debug("Acquaintance Words")
-    old_i = 0
-    for i in sorted(acquaint_phi)[:5]:
-        if i == old_i:
-            continue
-        old_i = i
-        index = [k for k, v in enumerate(acquaint_phi) if v == i]
-        for j in index:
-            logging.debug("{} {}".format(words[j], i))
+        print('Word: {}, friend phi: {}, acquaintence phi: {}'.format(words[i], phi_k_friend[i], phi_k_acquaint[i]))
 
-    return friend_phi, friend_prior, acquaint_phi, acquaint_prior
+    # Get the margin between the friend and acquintance for each word
+    phi_k_diff = [phi_k_friend[i] - phi_k_acquaint[i] for i in range(len(phi_k_friend))]
 
-def test(frequency, friend_phi, friend_prior, acquaint_phi, acquaint_prior):
+    # Print top friend and acquaintance words
+    top_friend_words = sorted(list(zip(phi_k_diff, words)))
+    for i in range(10):
+        print('#{} friend word: {}'.format(i+1, top_friend_words[-1-i]))
+    for i in range(10):
+        print('#{} acquaintance word: {}'.format(i+1, top_friend_words[i]))
+
+    return phi_k_friend, phi_friend, phi_k_acquaint, phi_acquaint
+
+
+def test(X, phi_k_friend, phi_friend, phi_k_acquaint, phi_acquaint):
+
     friend_prob = []
     acquaint_prob = []
-    for i in range(len(frequency)):
-        friend_prob.append(sum(list(map(operator.mul, frequency[i], friend_phi))) + friend_prior)
-        acquaint_prob.append(sum(list(map(operator.mul, frequency[i], acquaint_phi))) + acquaint_prior)
+
+    for i in range(len(X)):
+        friend_prob.append(sum(list(map(operator.mul, X[i], phi_k_friend))) + phi_friend)
+        acquaint_prob.append(sum(list(map(operator.mul, X[i], phi_k_acquaint))) + phi_acquaint)
 
     return friend_prob, acquaint_prob
 
 
 def output_results(friend_prob, acquaint_prob, people):
+
+    Y = []
     for x in zip(friend_prob, acquaint_prob, people):
         if(x[0] > x[1]):
             print("{} is a friend with {} to {}".format(x[2], x[0], x[1]))
+            Y.append(RELATIONS['friend'])
         elif(x[0] < x[1]):
             print("{} is a acquaintance with {} to {}".format(x[2], x[0], x[1]))
+            Y.append(RELATIONS['acquaintance'])
         else:
             print("Can not decide relationship for {}".format(x[2], x[0], x[1]))
+            Y.append(RELATIONS['unknown'])
+    return Y

@@ -22,18 +22,21 @@ def import_csv(filename):
     return person, word_list, people_list, X, Y
 
 
-def export_csv(person, word_list, people_list, X, Y):
+def export_csv(filename, person, word_list, people_list, X, Y):
 
-    train_filename = '{}.TRAINS'.format(re.search('%s(.*)%s' % ('<', '>'), person).group(1))
+    print('Person: {}'.format(person))
+    print('Words: {}'.format(word_list))
+    print('People: {}'.format(people_list))
+    print('Y: {}'.format(Y))
 
-    with open(train_filename, 'w') as train_file:
+    with open(filename, 'w') as train_file:
         writer = csv.writer(train_file, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         writer.writerow([person])
         writer.writerow(word_list)
         writer.writerow(people_list)
 
         for y, x in zip(Y, X):
-            writer.writerow([y] + x)
+            writer.writerow([y] + list(x))
 
 if __name__ == '__main__':
 
@@ -45,4 +48,4 @@ if __name__ == '__main__':
     print('Words: {}'.format(', '.join(word_list)))
     print('People: {}'.format(', '.join(people_list)))
 
-    export_csv(person, word_list, people_list, X, Y)
+    export_csv(sys.argv[1], person, word_list, people_list, X, Y)
