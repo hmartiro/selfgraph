@@ -4,8 +4,7 @@
 
 import logging
 
-from py2neo import neo4j, node, rel
-from py2neo.neo4j import Node, Record
+from py2neo import neo4j
 
 from selfgraph.core.categories import RELATIONS
 
@@ -24,7 +23,7 @@ def label(person_address):
     records = neo4j.CypherQuery(graph_db, query_str).execute()
 
     relationships = [(r.values[0], r.values[1]) for r in records.data]
-
+    print('Relationships to query: {}'.format(len(relationships)))
     for relation, person in relationships:
 
         options = dict(
