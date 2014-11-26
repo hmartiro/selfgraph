@@ -1,17 +1,16 @@
 """
 
 """
-
-import yaml
 import hashlib
 import logging
 import random
 from collections import Counter
-from py2neo import neo4j, node, rel
-from py2neo.neo4j import Node, Record
+from py2neo import neo4j, rel
+from py2neo.neo4j import Record
 from nltk.stem.snowball import SnowballStemmer
 
 from .categories import ROLES, RELATIONS, MESSAGES
+from .alias import create_alias, update_relationships_with_alias
 
 graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
 
@@ -26,6 +25,7 @@ def md5sum(data):
 def merge_nodes(nodes):
     """
     :param nodes: List of (label, properties) tuples.
+
     """
 
     batch = neo4j.WriteBatch(graph_db)
@@ -72,6 +72,7 @@ def get_or_create_relationships_in_batches(rels_data):
 def get_or_create_relationships(relationships):
     """
     :param edges: List of (start_node, type, end_node, properties).
+
     """
 
     batch = neo4j.WriteBatch(graph_db)
@@ -90,7 +91,7 @@ def load_data(data, range_inx=None):
         data = data[range_inx[0]:range_inx[1]]
     logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    # graph_db.clear()
+    graph_db.clear()
 
     messages_to_merge = set()
     words_to_merge = set()
@@ -98,9 +99,13 @@ def load_data(data, range_inx=None):
     roles_to_merge = set()
     relations_to_merge = set()
     heards_to_merge = set()
+    alias_to_merge = set()
 
+    heards = []
+    relations = []
+    roles = []
     for m in data:
-        print(m)
+       # print(m)
         # Queue all Message data
         msg_data = (
             MESSAGES['email'],
@@ -139,7 +144,7 @@ def load_data(data, range_inx=None):
             msg_data
         ) for field in ['to', 'from', 'cc', 'bcc'] for person in m[field]]
         roles_to_merge.update(roles)
-        # logging.info('Roles in message: {}'.format(roles))
+        logging.info('Roles in message: {}'.format(roles))
 
         # Queue all RELATION relationships
         try:
@@ -154,7 +159,8 @@ def load_data(data, range_inx=None):
             person
         ) for person in to_people]
         relations_to_merge.update(relations)
-        # logging.info('Relations in message: {}'.format(relations))
+
+        logging.info('Relations in message: {}'.format(relations))
 
         # Queue all HEARD relationships
         heards = [(
@@ -165,6 +171,11 @@ def load_data(data, range_inx=None):
         ) for word, freq in word_freqs.items() for to_person in to_people]
         heards_to_merge.update(heards)
         # logging.info('Heards in message: {}'.format(heards))
+
+    # use alias to update relations, heards, and roles
+    person_alias = create_alias(list(people_to_merge))
+    relations_to_merge, heards_to_merge, roles_to_merge = \
+        update_relationships_with_alias(person_alias, relations_to_merge, heards_to_merge, roles_to_merge)
 
     messages_to_merge_data = [('Message', {
         'category': category,
@@ -178,9 +189,21 @@ def load_data(data, range_inx=None):
         'active': True
     }) for word in words_to_merge]
 
-    people_to_merge_data = [('Person', {
-        'address': address
-    }) for address in people_to_merge]
+    people_to_merge_data = []
+    new_people_to_merge = []
+    for address in people_to_merge:
+        if address not in (y for x in person_alias for y in x):
+            people_to_merge_data.append(('Person', {'address': address,
+                                                    'alias': False}))
+            new_people_to_merge.append(address)
+    for x in person_alias:
+        people_to_merge_data.append(('Person', {'address': x[0],
+                                                'alias': False}))
+        new_people_to_merge.append(x[0])
+        for y in x[1:]:
+            people_to_merge_data.append(('Person', {'address': y,
+                                                    'alias': True}))
+            new_people_to_merge.append(y)
 
     message_nodes = merge_nodes_in_batches(messages_to_merge_data)
     message_dict = dict(zip(messages_to_merge, message_nodes))
@@ -189,7 +212,7 @@ def load_data(data, range_inx=None):
     word_dict = dict(zip(words_to_merge, word_nodes))
 
     person_nodes = merge_nodes_in_batches(people_to_merge_data)
-    person_dict = dict(zip(people_to_merge, person_nodes))
+    person_dict = dict(zip(new_people_to_merge, person_nodes))
 
     roles_to_merge_data = [(
         person_dict[person],
@@ -217,6 +240,12 @@ def load_data(data, range_inx=None):
     ) for to_person, freq, from_person, word in heards_to_merge]
     heard_nodes = get_or_create_relationships_in_batches(heards_to_merge_data)
     heard_dict = dict(zip(heards_to_merge, heard_nodes))
+
+    alias_to_merge_data = []
+    for x in person_alias:
+        for y in x[1:]:
+            alias_to_merge_data.append((person_dict[x[0]], 'ALIAS', person_dict[y], {}))
+    alias_nodes = get_or_create_relationships_in_batches(alias_to_merge_data)
 
 if __name__ == '__main__':
 
