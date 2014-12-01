@@ -17,12 +17,13 @@ from selfgraph.utils.csv import import_csv, export_csv
 def select_words(person_name):
 
     # find all words and total frequency
-    min_freq = 5
-    stdev_weight = 6
+    min_freq = 10
+    stdev_weight = 5
 
     query_str = 'match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' ' \
                 'OR h.name = \'{}\' return w.value, ' \
                 'sum(h.frequency)'.format(person_name, person_name)
+
     words, query_items = db.cypher_query(query_str)
 
     logging.info('Unique words: {}'.format(len(words)))
@@ -166,17 +167,46 @@ def build_training_and_testing_sets(person_name):
     percent_training = 0.7
     select_words(person_name)
 
+    # query_str = \
+    #     'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
+    #     '(p.address=\'{}\' or h.name=\'{}\') ' \
+    #     'return w, h, p'.format(person_name, person_name)
+    # heard_data, query_items = db.cypher_query(query_str)
+
+    heard_words = []
     query_str = \
         'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
         '(p.address=\'{}\' or h.name=\'{}\') ' \
-        'return w, h, p'.format(person_name, person_name)
-    heard_data, query_items = db.cypher_query(query_str)
+        'return w'.format(person_name, person_name)
+    words, query_items = db.cypher_query(query_str)
 
+    for a in words:
+        heard_words.append([Word.inflate(a[0]).value])
+
+    query_str = \
+        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
+        '(p.address=\'{}\' or h.name=\'{}\') ' \
+        'return h'.format(person_name, person_name)
+    heards, query_items = db.cypher_query(query_str)
+
+    for a in range(len(heards)):
+        heard_words[a].append(Heard.inflate((heards[a])[0]).frequency)
+        heard_words[a].append(Heard.inflate((heards[a])[0]).name)
+
+    query_str = \
+        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
+        '(p.address=\'{}\' or h.name=\'{}\') ' \
+        'return p'.format(person_name, person_name)
+    person, query_items = db.cypher_query(query_str)
+
+    for a in range(len(person)):
+        heard_words[a].append(Person.inflate((person[a])[0]).address)
+
+    #heard_data = [word, heard, person]
     # Inflate data
-    heard_data = [[Word.inflate(d[0]), Heard.inflate(d[1]), Person.inflate(d[2])] for d in heard_data]
 
     # w.value, h.frequency, h.name, p.address
-    heard_words = [[d[0].value, d[1].frequency, d[1].name, d[2].address] for d in heard_data]
+    # heard_words = [[d[0].value, d[1].frequency, d[1].name, d[2].address] for d in heard_data]
     heard_words = [[w[0], w[1], (w[2] if w[3] == person_name else w[3])] for w in heard_words]
     logging.info('build training query:\n{}'.format(query_str))
 

@@ -105,6 +105,12 @@ def load_data(data, range_inx=None):
     relations = []
     roles = []
     for m in data:
+        num_people = 0
+        for field in ['to', 'from', 'cc', 'bcc']:
+            for person in m[field]:
+                num_people += 1
+        if num_people > 30:
+            continue
        # print(m)
         # Queue all Message data
         msg_data = (
