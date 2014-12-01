@@ -47,6 +47,11 @@ class GraphDB():
         logging.debug('Query:\n{}'.format(query_str))
         self.batch.append_cypher(query_str)
 
+    def query(self, query_str):
+        self.add_query(query_str)
+        result = self.run()
+        return [r.values for r in result[0]]
+
     @staticmethod
     def create_node_str(*labels, **properties):
         """ Query string to create a single node. """

@@ -9,22 +9,24 @@ import re
 import csv
 from pprint import pprint
 
-from neomodel import db
-from selfgraph.core.graph import *
 from selfgraph.utils.csv import import_csv, export_csv
+from selfgraph.core.categories import RELATIONS, ROLES, MESSAGES
+from selfgraph.core.db import GraphDB
+
+db = GraphDB()
 
 
 def select_words(person_name):
 
     # find all words and total frequency
-    min_freq = 10
+    min_freq = 5
     stdev_weight = 5
 
     query_str = 'match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' ' \
                 'OR h.name = \'{}\' return w.value, ' \
                 'sum(h.frequency)'.format(person_name, person_name)
 
-    words, query_items = db.cypher_query(query_str)
+    words = db.query(query_str)
 
     logging.info('Unique words: {}'.format(len(words)))
     logging.info('Total uses: {}'.format(sum(w[1] for w in words)))
@@ -43,7 +45,7 @@ def select_words(person_name):
         else:
             appended_freq_list.append(word_freq)
 
-    print('TO REMOVE, freq < {}, {} words: {}\n\n'.format(
+    logging.info('TO REMOVE, freq < {}, {} words: {}\n\n'.format(
         min_freq, len(words_freq_too_low), [w[0] for w in words_freq_too_low]))
 
     # find mean of words
@@ -77,7 +79,9 @@ def select_words(person_name):
         len(words_to_keep_vals), words_to_keep_vals))
 
     # Deactivate words in DB
-    word_nodes_dict = {n.value: n for n in Word.nodes.all()}
+    word_nodes = [n[0] for n in db.query('MATCH (w:Word) return w')]
+    word_nodes_dict = {n.get_cached_properties()['value']: n for n in word_nodes}
+
     activated = 0
     for word, word_node in word_nodes_dict.items():
 
@@ -86,18 +90,22 @@ def select_words(person_name):
 
         state = not word in words_to_remove_vals
         logging.debug('Word: {}, New: {}, Old: {}'.format(
-            word, state, word_node.active
+            word, state, word_node.get_cached_properties()['active']
         ))
 
         # if word_node.active != state:
-        word_node.active = state
-        word_node.save()
+        db.batch.set_property(word_node, 'active', state)
+
+        #word_node.set_properties = state
+        #word_node.save()
         #else:
         #    logging.debug('States are the same!')
 
         if state:
             activated += 1
             logging.debug('Words active: {}'.format(activated))
+
+    db.run()
 
     logging.info('Query string for select_words:\n{}'.format(query_str))
 
@@ -107,8 +115,8 @@ def select_words(person_name):
 def train_people(person_name):
 
     options = dict(
-        acquaintance=Relation.CATEGORIES['acquaintance'],
-        friend=Relation.CATEGORIES['friend']
+        acquaintance=RELATIONS['acquaintance'],
+        friend=RELATIONS['friend']
     )
 
     while True:

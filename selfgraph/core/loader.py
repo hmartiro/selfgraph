@@ -30,7 +30,7 @@ def load_data(data, range_inx=None):
         data = data[range_inx[0]:range_inx[1]]
     logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    #db.clear()
+    db.clear()
 
     db.create_index('Person', 'address')
     db.create_index('Word', 'value')
