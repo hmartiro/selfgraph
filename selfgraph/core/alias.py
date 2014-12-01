@@ -304,11 +304,6 @@ def ask_user_if_match(p1, p2, person_alias, not_an_alias):
     automatically prompt the user and ask if they are a match
 
     """
-    for p in person_alias:
-        print(p)
-
-#    for p in not_an_alias.items():
-#        print(p)
 
     correct_input = False
     while correct_input is False:
