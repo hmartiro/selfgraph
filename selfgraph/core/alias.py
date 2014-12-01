@@ -304,7 +304,7 @@ def ask_user_if_match(p1, p2, person_alias, not_an_alias):
     automatically prompt the user and ask if they are a match
 
     """
-
+    
     correct_input = False
     while correct_input is False:
         match = input('{} **==** {} ??? (y/n): '.format(p1, p2))
@@ -403,7 +403,7 @@ def create_alias(people):
                 if len(alias) > 0:
                     person_alias.append([additional_people[x]] + alias)
 
-        not_an_alias = set()
+        not_an_alias = {}
         # if you are not in the alias list you are not an alias
         for p1 in additional_people:
             p1_alias = [p1]

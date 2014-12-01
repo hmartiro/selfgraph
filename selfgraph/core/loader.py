@@ -5,8 +5,6 @@ import hashlib
 import logging
 import random
 from collections import Counter
-from py2neo import neo4j, rel
-from py2neo.neo4j import Record
 from nltk.stem.snowball import SnowballStemmer
 
 from selfgraph.core.db import GraphDB
@@ -32,7 +30,7 @@ def load_data(data, range_inx=None):
         data = data[range_inx[0]:range_inx[1]]
     logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    db.clear()
+    #db.clear()
 
     db.create_index('Person', 'address')
     db.create_index('Word', 'value')
@@ -42,8 +40,8 @@ def load_data(data, range_inx=None):
     people_to_merge = set()
     roles_to_merge = set()
     relations_to_merge = set()
-    heards_to_merge = set()
     alias_to_merge = set()
+    heards_to_merge = list()
 
     heards = []
     relations = []
@@ -113,14 +111,27 @@ def load_data(data, range_inx=None):
         logging.info('Relations in message: {}'.format(relations))
 
         # Queue all HEARD relationships
-        heards = [(
+        heards = [[
             to_person,
             freq,
             from_person,
             word
-        ) for word, freq in word_freqs.items() for to_person in to_people]
-        heards_to_merge.update(heards)
+        ] for word, freq in word_freqs.items() for to_person in to_people]
+        heards_to_merge.extend(heards)
         # logging.info('Heards in message: {}'.format(heards))
+
+    # Combine heards and sum up their frequencies
+    logging.info('Total heards: {}'.format(len(heards_to_merge)))
+    heards_to_merge = sorted(heards_to_merge, key=lambda h: (h[3], h[0], h[2]))
+    for i in range(len(heards_to_merge) - 1):
+        h0 = heards_to_merge[i]
+        h1 = heards_to_merge[i+1]
+        if h0[0] == h1[0] and h0[2] == h1[2] and h0[3] == h1[3]:
+            h0[1] = h0[1] + h1[1]
+            h1[1] = h0[1]
+            logging.debug('Combined {}, {}, {} {}'.format(h0[0], h0[2], h0[3], h0[1]))
+    heards_to_merge = set(tuple(d) for d in heards_to_merge)
+    logging.info('Unique heards: {}'.format(len(heards_to_merge)))
 
     # use alias to update relations, heards, and roles
     person_alias = create_alias(list(people_to_merge))
@@ -203,14 +214,28 @@ def load_data(data, range_inx=None):
     relation_nodes = db.merge_relationships_by_id(relations_to_merge_data)
     relation_dict = dict(zip(relations_to_merge, relation_nodes))
 
+    # Merge heards, creating with 0 frequency if they don't exist
     heards_to_merge_data = [(
         'HEARD',
         person_dict[to_person]._id,
         word_dict[word]._id,
         dict(name=from_person),  # Match criteria
-        dict(frequency=freq),  # If created
+        dict(frequency=0),  # If created
         dict()  # If matched
     ) for to_person, freq, from_person, word in heards_to_merge]
+
+    heard_nodes = db.merge_relationships_by_id(heards_to_merge_data)
+    heard_dict = dict(zip(heards_to_merge, heard_nodes))
+
+    # Do heards over again, this time updating the frequencies
+    heards_to_merge_data = [(
+        'HEARD',
+        person_dict[heard_data[0]]._id,
+        word_dict[heard_data[3]]._id,
+        dict(name=heard_data[2]),  # Match criteria
+        dict(),  # If created
+        dict(frequency=heard_dict[heard_data].get_cached_properties()['frequency'] + heard_data[1])  # If matched
+    ) for heard_data in heards_to_merge]
 
     heard_nodes = db.merge_relationships_by_id(heards_to_merge_data)
     heard_dict = dict(zip(heards_to_merge, heard_nodes))
