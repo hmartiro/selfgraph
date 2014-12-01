@@ -164,7 +164,7 @@ def load_data(data, range_inx=None):
 
             people_to_merge_data.append((
                 ['Person'],
-                dict(address=x[0]),  # Match criteria
+                dict(address=y),  # Match criteria
                 dict(alias=True),  # If created
                 dict(alias=True)  # If matched
             ))
