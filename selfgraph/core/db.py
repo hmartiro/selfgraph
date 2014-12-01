@@ -31,6 +31,10 @@ class GraphDB():
 
     def run(self, return_data=True):
         """ Commit the batch, and optionally return data. """
+
+        # for request in self.batch._requests:
+        #     logging.info(request._body)
+
         if return_data:
             result = self.batch.submit()
             self.batch = neo4j.WriteBatch(self.db)
@@ -40,6 +44,7 @@ class GraphDB():
             self.batch = neo4j.WriteBatch(self.db)
 
     def add_query(self, query_str):
+        logging.debug('Query:\n{}'.format(query_str))
         self.batch.append_cypher(query_str)
 
     @staticmethod
@@ -88,13 +93,46 @@ class GraphDB():
         to add on creation or matching.
         """
 
-        query_str = 'MERGE (n1{} {{{}}})-[r:{} {{{}}}]-(n2{} {{{}}})'.format(
+        query_str = 'MATCH (n1{} {{{}}}), (n2{} {{{}}})'.format(
             ''.join(':' + l for l in n1_labels),
             ', '.join('{}: {}'.format(k, repr(v)) for k, v in n1_properties.items()),
-            rel_type,
-            ', '.join('{}: {}'.format(k, repr(v)) for k, v in match_properties.items()),
             ''.join(':' + l for l in n2_labels),
             ', '.join('{}: {}'.format(k, repr(v)) for k, v in n2_properties.items())
+        )
+
+        query_str += ' MERGE (n1)-[r:{} {{{}}}]-(n2)'.format(
+            rel_type,
+            ', '.join('{}: {}'.format(k, repr(v)) for k, v in match_properties.items()),
+        )
+
+        if on_create_properties:
+            query_str += ' ON CREATE SET {}'.format(
+                ', '.join('r.{} = {}'.format(k, repr(v)) for k, v in on_create_properties.items())
+            )
+
+        if on_match_properties:
+            query_str += ' ON MATCH SET {}'.format(
+                ', '.join('r.{} = {}'.format(k, repr(v)) for k, v in on_match_properties.items())
+            )
+
+        query_str += ' RETURN r'
+
+        return query_str
+
+    @staticmethod
+    def merge_relationship_by_id_str(rel_type, n1_id, n2_id,
+                               match_properties, on_create_properties=None, on_match_properties=None):
+        """
+
+        """
+
+        query_str = 'MATCH (n1), (n2) WHERE ID(n1) = {} AND ID(n2) = {}'.format(
+            n1_id, n2_id
+        )
+
+        query_str += ' MERGE (n1)-[r:{} {{{}}}]-(n2)'.format(
+            rel_type,
+            ', '.join('{}: {}'.format(k, repr(v)) for k, v in match_properties.items()),
         )
 
         if on_create_properties:
@@ -247,6 +285,22 @@ class GraphDB():
 
         return relationships
 
+    def merge_relationships_by_id(self, data):
+
+        relationships = []
+
+        for i in range(len(data))[::self.BATCH_SIZE]:
+
+                batch_nodes_data = data[i:i+self.BATCH_SIZE]
+
+                for r_data in batch_nodes_data:
+                    self.add_query(self.merge_relationship_by_id_str(*r_data))
+
+                batch_rels = self.run()
+                relationships.extend(batch_rels)
+
+        return relationships
+
     def create_index(self, label, prop):
 
         query_str = 'CREATE INDEX ON :{}({})'.format(label, prop)
@@ -334,7 +388,7 @@ if __name__ == '__main__':
         data = []
         for i in range(count):
             data.append((
-                'Random',
+                'RANDOM',
                 ['Person'],
                 dict(name='Steve{}'.format(random.randint(0, len(nodes)-1))),
                 ['Person'],
@@ -350,7 +404,7 @@ if __name__ == '__main__':
 
     g.create_index('Person', 'name')
 
-    nodes = time_function(create_nodes_batch, 500)
-    nodes = time_function(merge_nodes_batch, 500)
-    rels = time_function(create_rels_batch, 500, nodes)
-    rels = time_function(merge_rels_batch, 500, nodes)
+    nodes = time_function(create_nodes_batch, 5)
+    nodes = time_function(merge_nodes_batch, 5)
+    #rels = time_function(create_rels_batch, 50, nodes)
+    rels = time_function(merge_rels_batch, 50, nodes)

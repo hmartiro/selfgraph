@@ -9,76 +9,17 @@ from py2neo import neo4j, rel
 from py2neo.neo4j import Record
 from nltk.stem.snowball import SnowballStemmer
 
-from .categories import ROLES, RELATIONS, MESSAGES
-from .alias import create_alias, update_relationships_with_alias
+from selfgraph.core.db import GraphDB
+from selfgraph.core.categories import ROLES, RELATIONS, MESSAGES
+from selfgraph.core.alias import create_alias, update_relationships_with_alias
 
-graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
+db = GraphDB()
 
-BATCH_SIZE = 500
 MAX_WORDS_PER_MESSAGE = 1000
 
 
 def md5sum(data):
     return hashlib.md5(data.encode()).digest()
-
-
-def merge_nodes(nodes):
-    """
-    :param nodes: List of (label, properties) tuples.
-
-    """
-
-    batch = neo4j.WriteBatch(graph_db)
-    merges = [
-        "MERGE (n%d:%s {%s})" % (
-            i,
-            node[0],
-            ', '.join(['{}: \'{}\''.format(k, v) for k, v in node[1].items()])
-        ) for i, node in enumerate(nodes)]
-
-    query = ' \n'.join(merges)
-    query += ' \nRETURN {};'.format(', '.join(
-        ['n{}'.format(i) for i in range(len(nodes))]
-    ))
-
-    batch.append_cypher(query)
-    return batch.submit()
-
-
-def merge_nodes_in_batches(nodes_data):
-    ret_nodes = []
-    for i in range(len(nodes_data))[::BATCH_SIZE]:
-        batch_args = nodes_data[i:i+BATCH_SIZE]
-        ret = merge_nodes(batch_args)
-        if type(ret[0]) == Record:
-            ret_nodes.extend(ret[0].values)
-        else:
-            ret_nodes.append(ret[0])
-    return ret_nodes
-
-
-def get_or_create_relationships_in_batches(rels_data):
-    ret_rels = []
-    for i in range(len(rels_data))[::BATCH_SIZE]:
-        batch_args = rels_data[i:i+BATCH_SIZE]
-        ret = get_or_create_relationships(batch_args)
-        if type(ret) == list:
-            ret_rels.extend(ret)
-        else:
-            ret_rels.append(ret)
-    return ret_rels
-
-
-def get_or_create_relationships(relationships):
-    """
-    :param edges: List of (start_node, type, end_node, properties).
-
-    """
-
-    batch = neo4j.WriteBatch(graph_db)
-    for r_data in relationships:
-        batch.create(rel(r_data))
-    return batch.submit()
 
 
 def load_data(data, range_inx=None):
@@ -91,7 +32,10 @@ def load_data(data, range_inx=None):
         data = data[range_inx[0]:range_inx[1]]
     logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    graph_db.clear()
+    db.clear()
+
+    db.create_index('Person', 'address')
+    db.create_index('Word', 'value')
 
     messages_to_merge = set()
     words_to_merge = set()
@@ -150,7 +94,7 @@ def load_data(data, range_inx=None):
             msg_data
         ) for field in ['to', 'from', 'cc', 'bcc'] for person in m[field]]
         roles_to_merge.update(roles)
-        logging.info('Roles in message: {}'.format(roles))
+        logging.info('Roles in message: {}'.format([(r[0], r[1]) for r in roles]))
 
         # Queue all RELATION relationships
         try:
@@ -183,75 +127,106 @@ def load_data(data, range_inx=None):
     relations_to_merge, heards_to_merge, roles_to_merge = \
         update_relationships_with_alias(person_alias, relations_to_merge, heards_to_merge, roles_to_merge)
 
-    messages_to_merge_data = [('Message', {
-        'category': category,
-        'date': date,
-        'text': text,
-        #'uuid': uuid
-    }) for category, date, text in messages_to_merge]
+    messages_to_merge_data = [(
+        ['Message'],
+        dict(category=category, date=date, text=text),  # Match criteria
+        dict(processed=False),  # If created
+        dict(),  # If matched
+    ) for category, date, text in messages_to_merge]
 
-    words_to_merge_data = [('Word', {
-        'value': word,
-        'active': True
-    }) for word in words_to_merge]
+    words_to_merge_data = [(
+        ['Word'],
+        dict(value=word),  # Match criteria
+        dict(active=True),  # If created
+        dict()  # If matched
+    ) for word in words_to_merge]
 
     people_to_merge_data = []
     new_people_to_merge = []
     for address in people_to_merge:
         if address not in (y for x in person_alias for y in x):
-            people_to_merge_data.append(('Person', {'address': address,
-                                                    'alias': False}))
+            people_to_merge_data.append((
+                ['Person'],
+                dict(address=address),  # Match criteria
+                dict(alias=False),  # If created
+                dict()  # If matched
+            ))
             new_people_to_merge.append(address)
     for x in person_alias:
-        people_to_merge_data.append(('Person', {'address': x[0],
-                                                'alias': False}))
+        people_to_merge_data.append((
+            ['Person'],
+            dict(address=x[0]),  # Match criteria
+            dict(alias=False),  # If created
+            dict()  # If matched
+        ))
         new_people_to_merge.append(x[0])
         for y in x[1:]:
-            people_to_merge_data.append(('Person', {'address': y,
-                                                    'alias': True}))
+
+            people_to_merge_data.append((
+                ['Person'],
+                dict(address=x[0]),  # Match criteria
+                dict(alias=True),  # If created
+                dict(alias=True)  # If matched
+            ))
             new_people_to_merge.append(y)
 
-    message_nodes = merge_nodes_in_batches(messages_to_merge_data)
+    message_nodes = db.merge_nodes(messages_to_merge_data)
     message_dict = dict(zip(messages_to_merge, message_nodes))
 
-    word_nodes = merge_nodes_in_batches(words_to_merge_data)
+    word_nodes = db.merge_nodes(words_to_merge_data)
     word_dict = dict(zip(words_to_merge, word_nodes))
 
-    person_nodes = merge_nodes_in_batches(people_to_merge_data)
+    person_nodes = db.merge_nodes(people_to_merge_data)
     person_dict = dict(zip(new_people_to_merge, person_nodes))
 
     roles_to_merge_data = [(
-        person_dict[person],
         'ROLE',
-        message_dict[message],
-        {'category': role}
+        person_dict[person]._id,
+        message_dict[message]._id,
+        dict(category=role),  # Match criteria
+        dict(),  # If created
+        dict()  # If matched
     ) for person, role, message in roles_to_merge]
-    role_nodes = get_or_create_relationships_in_batches(roles_to_merge_data)
+
+    role_nodes = db.merge_relationships_by_id(roles_to_merge_data)
     role_dict = dict(zip(roles_to_merge, role_nodes))
 
     relations_to_merge_data = [(
-        person_dict[from_person],
         'RELATION',
-        person_dict[to_person],
-        {'category': category}
+        person_dict[from_person]._id,
+        person_dict[to_person]._id,
+        dict(),  # Match criteria
+        dict(category=category),  # If created
+        dict()  # If matched
     ) for from_person, category, to_person in relations_to_merge]
-    relation_nodes = get_or_create_relationships_in_batches(relations_to_merge_data)
+
+    relation_nodes = db.merge_relationships_by_id(relations_to_merge_data)
     relation_dict = dict(zip(relations_to_merge, relation_nodes))
 
     heards_to_merge_data = [(
-        person_dict[to_person],
         'HEARD',
-        word_dict[word],
-        {'frequency': freq, 'name': from_person}
+        person_dict[to_person]._id,
+        word_dict[word]._id,
+        dict(name=from_person),  # Match criteria
+        dict(frequency=freq),  # If created
+        dict()  # If matched
     ) for to_person, freq, from_person, word in heards_to_merge]
-    heard_nodes = get_or_create_relationships_in_batches(heards_to_merge_data)
+
+    heard_nodes = db.merge_relationships_by_id(heards_to_merge_data)
     heard_dict = dict(zip(heards_to_merge, heard_nodes))
 
     alias_to_merge_data = []
     for x in person_alias:
         for y in x[1:]:
-            alias_to_merge_data.append((person_dict[x[0]], 'ALIAS', person_dict[y], {}))
-    alias_nodes = get_or_create_relationships_in_batches(alias_to_merge_data)
+            alias_to_merge_data.append((
+                'ALIAS',
+                person_dict[x[0]]._id,
+                person_dict[y]._id,
+                dict(),  # Match criteria
+                dict(),  # If created
+                dict()  # If matched
+            ))
+    alias_nodes = db.merge_relationships_by_id(alias_to_merge_data)
 
 if __name__ == '__main__':
 
