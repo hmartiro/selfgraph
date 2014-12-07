@@ -66,7 +66,7 @@ def select_words(person_name):
                 word[0]
             ))
 
-    print('TO REMOVE, freq > {}, {} words: {}\n\n'.format(
+    logging.info('TO REMOVE, freq > {}, {} words: {}\n\n'.format(
         max_freq, len(words_freq_too_high), [w[0] for w in words_freq_too_high]))
 
     words_to_remove = words_freq_too_high + words_freq_too_low
@@ -75,7 +75,7 @@ def select_words(person_name):
     words_to_remove_vals = sorted([w[0] for w in words_to_remove])
 
     words_to_keep_vals = sorted(set(word_vals).difference(set(words_to_remove_vals)))
-    print('TO KEEP, {} words: {}\n\n'.format(
+    logging.info('TO KEEP, {} words: {}\n\n'.format(
         len(words_to_keep_vals), words_to_keep_vals))
 
     # Deactivate words in DB
@@ -152,15 +152,11 @@ def create_word_people_freq(words, freq, people, distinct_people):
 def build_training_matrix(words, freq, people, distinct_people, person_name):
 
     query_str = 'match (p:Person {{address: \'{}\'}})-[r:RELATION]-(p1:Person) ' \
-                'return r, p1'.format(person_name)
-    print(query_str)
-    result, query_items = db.cypher_query(query_str)
-    result = [[Relation.inflate(d[0]), Person.inflate(d[1])] for d in result]
+                'return p1.address, r.category'.format(person_name)
+    logging.info('Build training matrix query: {}'.format(query_str))
+    data = db.query(query_str)
 
-    person_relations = {}
-    for relation, person in result:
-        person_relations[person.address] = relation.category
-
+    person_relations = dict(data)
     relation = [person_relations[p] for p in distinct_people]
 
     return create_word_people_freq(words, freq, people, distinct_people), relation
@@ -175,62 +171,30 @@ def build_training_and_testing_sets(person_name):
     percent_training = 0.7
     select_words(person_name)
 
-    # query_str = \
-    #     'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
-    #     '(p.address=\'{}\' or h.name=\'{}\') ' \
-    #     'return w, h, p'.format(person_name, person_name)
-    # heard_data, query_items = db.cypher_query(query_str)
-
-    heard_words = []
     query_str = \
         'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
         '(p.address=\'{}\' or h.name=\'{}\') ' \
-        'return w'.format(person_name, person_name)
-    words, query_items = db.cypher_query(query_str)
+        'return w.value, h.frequency, h.name, p.address'.format(person_name, person_name)
+    heard_words = db.query(query_str)
+    logging.info('Heard words query:\n{}'.format(query_str))
 
-    for a in words:
-        heard_words.append([Word.inflate(a[0]).value])
-
-    query_str = \
-        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
-        '(p.address=\'{}\' or h.name=\'{}\') ' \
-        'return h'.format(person_name, person_name)
-    heards, query_items = db.cypher_query(query_str)
-
-    for a in range(len(heards)):
-        heard_words[a].append(Heard.inflate((heards[a])[0]).frequency)
-        heard_words[a].append(Heard.inflate((heards[a])[0]).name)
-
-    query_str = \
-        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
-        '(p.address=\'{}\' or h.name=\'{}\') ' \
-        'return p'.format(person_name, person_name)
-    person, query_items = db.cypher_query(query_str)
-
-    for a in range(len(person)):
-        heard_words[a].append(Person.inflate((person[a])[0]).address)
-
-    #heard_data = [word, heard, person]
-    # Inflate data
-
-    # w.value, h.frequency, h.name, p.address
-    # heard_words = [[d[0].value, d[1].frequency, d[1].name, d[2].address] for d in heard_data]
+    # Just show the person who is not known
     heard_words = [[w[0], w[1], (w[2] if w[3] == person_name else w[3])] for w in heard_words]
-    logging.info('build training query:\n{}'.format(query_str))
 
     logging.info('All heards: {}'.format(len(heard_words)))
 
-    # Merge operation
+    # Merge operation to combine words sent and received
     heard_words.sort()
-
     for i in range(len(heard_words)-1):
-        if heard_words[i] == heard_words[i-1]:
-            logging.debug('Merge: {}, {}'.format(heard_words[i], heard_words[i-1]))
-            heard_words[i][1] += heard_words[i-1][1]
-            heard_words[i-1][1] = heard_words[i][1]
+        h0, h1 = heard_words[i-1], heard_words[i]
+        if h0[0] == h1[0] and h0[2] == h1[2]:
+
+            logging.info('Merge: {}, {}'.format(heard_words[i], heard_words[i-1]))
+            h1[1] += h0[1]
+            h0[1] = h1[1]
 
     # Deduplicate list, frequencies already added
-    heard_words = list(set(tuple(word) for word in heard_words))
+    heard_words = sorted(set(tuple(word) for word in heard_words))
 
     logging.info('Unique heards: {}'.format(len(heard_words)))
 
@@ -262,9 +226,9 @@ def build_training_and_testing_sets(person_name):
         words, freq, people,
         test_people_list
     )
-    print(list(zip(*training_dict.values())))
+
     # output training matrix to file
-    train_filename = '{}.TRAIN'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
+    train_filename = '{}.TRAIN'.format(re.search('<?(.*)>?', person_name).group(1))
     export_csv(
         filename=train_filename,
         person=person_name,
@@ -274,7 +238,7 @@ def build_training_and_testing_sets(person_name):
         Y=training_relation
     )
     # output testing matrix to file
-    test_filename = '{}.TEST'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
+    test_filename = '{}.TEST'.format(re.search('<?(.*)>?', person_name).group(1))
     export_csv(
         filename=test_filename,
         person=person_name,
@@ -283,32 +247,6 @@ def build_training_and_testing_sets(person_name):
         X=list(zip(*testing_dict.values())),
         Y=testing_relation
     )
-
-    # # output training matrix to file
-    # train_filename = '{}.TRAIN'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
-    # with open(train_filename, 'w') as train_file:
-    #     writer = csv.writer(train_file, delimiter=' ',
-    #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
-    #     writer.writerow([person_name])
-    #     writer.writerow(["%s " % entry for entry in training_dict])
-    #     writer.writerow(["%s " % person for person in distinct_people[:training_inx]])
-    #     for i in range(len(training_relation)):
-    #         row = [training_dict[entry][i] for entry in training_dict]
-    #         row.insert(0, training_relation[i])
-    #         writer.writerow(row)
-    #
-    # # output testing matrix to file
-    # test_filename = '{}.TEST'.format(re.search('%s(.*)%s' % ('<', '>'), person_name).group(1))
-    # with open(test_filename, 'w') as test_file:
-    #     writer = csv.writer(test_file, delimiter=' ',
-    #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
-    #     writer.writewrow([person_name])
-    #     writer.writerow(["%s " % entry for entry in testing_dict])
-    #     writer.writerow(["%s " % person for person in distinct_people[training_inx:]])
-    #     for i in range(len(testing_relation)):
-    #         row = [training_dict[entry][i] for entry in testing_dict]
-    #         row.insert(0, testing_relation[i])
-    #         writer.writerow(row)
 
 if __name__ == '__main__':
 
