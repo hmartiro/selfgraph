@@ -1,7 +1,7 @@
 """
 
 """
-import hashlib
+
 import logging
 import random
 from collections import Counter
@@ -16,21 +16,20 @@ db = GraphDB()
 MAX_WORDS_PER_MESSAGE = 1000
 
 
-def md5sum(data):
-    return hashlib.md5(data.encode()).digest()
-
-
-def load_data(data, range_inx=None):
+def load_data(data, range_inx=None, clear=False):
     """
     Creates Messages, People, and Roles for the given file.
 
     """
+
     logging.info('Total messages in file: {}'.format(len(data)))
     if range_inx:
         data = data[range_inx[0]:range_inx[1]]
     logging.info('Messages to be loaded: {}'.format(len(data)))
 
-    db.clear()
+    if clear:
+        logging.warning('CLEARING DATABASE!')
+        db.clear()
 
     db.create_index('Person', 'address')
     db.create_index('Word', 'value')
@@ -40,26 +39,23 @@ def load_data(data, range_inx=None):
     people_to_merge = set()
     roles_to_merge = set()
     relations_to_merge = set()
-    alias_to_merge = set()
     heards_to_merge = list()
 
-    heards = []
-    relations = []
-    roles = []
     for m in data:
+
         num_people = 0
         for field in ['to', 'from', 'cc', 'bcc']:
-            for person in m[field]:
-                num_people += 1
+            num_people += len(m[field])
+
+        # Ignore large group emails to avoid having to classify
         if num_people > 30:
             continue
-       # print(m)
+
         # Queue all Message data
         msg_data = (
             MESSAGES['email'],
             m['date'],
             m['text'],
-            #md5sum(m['text'] + m['date'])
         )
         messages_to_merge.add(msg_data)
         logging.info('Processing message of length {}'.format(len(m['text'])))
@@ -261,9 +257,11 @@ if __name__ == '__main__':
     in_file = sys.argv[1]
 
     range_inx = None
-    if len(sys.argv) == 4:
+    if len(sys.argv) >= 4:
         range_inx = [int(sys.argv[2]), int(sys.argv[3])]
+
+    clear_db = '--clear' in sys.argv
 
     with open(in_file, 'rb') as file:
         messages = pickle.loads(file.read())
-        load_data(messages, range_inx=range_inx)
+        load_data(messages, range_inx=range_inx, clear=clear_db)

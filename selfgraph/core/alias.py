@@ -1,5 +1,6 @@
 import re
 import difflib
+from pprint import pprint
 from py2neo import neo4j, node, rel
 
 graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
@@ -50,11 +51,14 @@ def update_not_an_alias(p_alias, p, not_an_alias):
 
     if p in not_an_alias:
         for person in not_an_alias[p]:
-            tmp = list(not_an_alias[person])
-            tmp.remove(p)
-            tmp.append(p_alias)
-            not_an_alias[person] = set(tmp)
+            not_an_alias[person].remove(p)
+            not_an_alias[person].add(p_alias)
+
+        if p_alias not in not_an_alias:
+            not_an_alias[p_alias] = set()
+
         not_an_alias[p_alias] = not_an_alias[p_alias] | not_an_alias[p]
+        del not_an_alias[p]
 
 
 def update_alias(p, alias_header, person_alias, not_an_alias):
@@ -309,13 +313,16 @@ def ask_user_if_match(p1, p2, person_alias, not_an_alias):
     while correct_input is False:
         match = input('{} **==** {} ??? (y/n): '.format(p1, p2))
         if match == 'y':
-            if p1 not in (x for r in person_alias for x in r):
+            if (p1 not in (x for r in person_alias for x in r) and
+                    p2 not in (x for r in person_alias for x in r)):
+
                 add_new_alias(p1, p2, person_alias, not_an_alias)
             else:
                 for x in person_alias:
                     if p1 in x:
                         update_alias(p2, x[0], person_alias, not_an_alias)
-
+                    elif p2 in x:
+                        update_alias(p1, x[0], person_alias, not_an_alias)
             correct_input = True
         elif match == 'n':
             add_not_an_alias(p1, p2, not_an_alias, person_alias)
@@ -394,7 +401,7 @@ def create_alias(people):
 
         alias_extraction = []
         for x in range(len(alias_marker)):
-            if alias_marker[x] == 'False':
+            if not alias_marker[x]:
                 query_str = 'match (p1:Person {{address: \'{}\'}})-[:ALIAS]-(p2:Person) ' \
                             'return p2.address'.format(additional_people[x])
                 query_result = neo4j.CypherQuery(graph_db, query_str).execute()
