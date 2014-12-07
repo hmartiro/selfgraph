@@ -29,6 +29,7 @@ def load_data(data, range_inx=None, clear=False):
 
     if clear:
         logging.warning('CLEARING DATABASE!')
+        input('Press enter if you\'re sure!')
         db.clear()
 
     db.create_index('Person', 'address')

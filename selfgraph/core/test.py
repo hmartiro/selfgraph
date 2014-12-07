@@ -5,8 +5,9 @@ from py2neo import neo4j
 from selfgraph.algorithms import linearSVC, naive_bayes
 from selfgraph.utils.csv import import_csv
 from selfgraph.core.categories import RELATIONS
+from selfgraph.core.db import GraphDB
 
-graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
+db = GraphDB()
 
 
 def test_naive_bayes(train_name, test_name):
@@ -65,17 +66,14 @@ def confusion_matrix(person, people, Y):
     print(Y)
 
     query_str = 'match (p:Person {{address: \'{}\'}})-[r:RELATION]-(p1:Person) ' \
-                'return p1, r'.format(person)
+                'return p1.address, r.category'.format(person)
     print(query_str)
 
-    records = neo4j.CypherQuery(graph_db, query_str).execute()
-    results = [(r.values[0]['address'], r.values[1]['category']) for r in records.data]
+    data = db.query(query_str)
+    data.sort()
 
-    results.sort()
-
-    # TODO make sure duplicate relations are gone, shouldn't have to do this
     relation_map = {}
-    for p, r in results:
+    for p, r in data:
         relation_map[p] = r
 
     confusion = {
@@ -87,6 +85,9 @@ def confusion_matrix(person, people, Y):
         if y == relation_map[p]:
             confusion[y][0] += 1
         else:
+            print('Incorrect classification: {}, given {} not {}'.format(
+                p, y, relation_map[p]
+            ))
             confusion[y][1] += 1
 
     return confusion

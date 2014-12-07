@@ -112,10 +112,10 @@ def output_results(friend_prob, acquaint_prob, people):
 
     Y = []
     for x in zip(friend_prob, acquaint_prob, people):
-        if(x[0] > x[1]):
+        if x[0] > x[1]:
             print("{} is a friend with {} to {}".format(x[2], x[0], x[1]))
             Y.append(RELATIONS['friend'])
-        elif(x[0] < x[1]):
+        elif x[0] < x[1]:
             print("{} is a acquaintance with {} to {}".format(x[2], x[0], x[1]))
             Y.append(RELATIONS['acquaintance'])
         else:

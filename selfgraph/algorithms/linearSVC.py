@@ -1,10 +1,15 @@
 import csv
 from sklearn import svm
-
+import numpy as np
+from sklearn.preprocessing import scale, normalize
 
 def train(X, Y):
+
+    X_array = np.array(X)
+    #X_array = normalize(X_array, axis=0, norm='l2')
+
     lin_clf = svm.LinearSVC()
-    lin_clf.fit(X, Y)
+    lin_clf.fit(X_array, Y)
 
     return lin_clf
 
