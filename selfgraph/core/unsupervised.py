@@ -45,13 +45,14 @@ if __name__ == '__main__':
 
     if len(sys.argv) != 4:
         print("Error! Wrong number of input arguments. \n"
-              "USAGE: test.py [ALGORITHM: {}] [DATA FILENAME] [NUMBER FEATURES]".format(', '.join(algo_names)))
+              "USAGE: unsupervised.py [ALGORITHM: {}] [DATA FILENAME] [NUMBER FEATURES]".format(', '.join(algo_names)))
 
     algorithm = sys.argv[1]
     data_filename = sys.argv[2]
     num_features = sys.argv[3]
 
     if algorithm == 'kmeans':
-        print_results(*execute_kmeans(data_filename, num_features))
+        #print_results(*execute_kmeans(data_filename, num_features))
+        execute_kmeans(data_filename, num_features)
     else:
         print("{} is not a valid algorithm name. Valid names are: {}".format(', '.join(algo_names)))
