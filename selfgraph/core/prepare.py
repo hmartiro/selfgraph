@@ -20,7 +20,7 @@ def select_words(person_name):
 
     # find all words and total frequency
     min_freq = 5
-    stdev_weight = 5
+    stdev_weight = 20
 
     query_str = 'match (w:Word)-[h:HEARD]-(p:Person) where p.address = \'{}\' ' \
                 'OR h.name = \'{}\' return w.value, ' \
@@ -172,7 +172,6 @@ def build_unsupervised_matrix(words, freq, people, distinct_people):
 
 def build_training_and_testing_sets(person_name):
 
-    percent_training = 0.7
     select_words(person_name)
 
     query_str = \
@@ -207,50 +206,54 @@ def build_training_and_testing_sets(person_name):
     words, freq, people = list(zip(*heard_words))
     distinct_people = list(set(people))
 
-    # find test and training matrices
-    training_inx = round(len(distinct_people)*percent_training)
+    validation_count = 5
+    percent_training = 1.0/validation_count
+    for i in range(validation_count):
 
-    logging.info('Chose {} people for training, {} for testing.'.format(
-        training_inx,
-        len(distinct_people) - training_inx
-    ))
+        # find test and training matrices
+        training_inx_start = round(len(distinct_people)*(i/validation_count))
+        training_inx_end = round(len(distinct_people)*((i+1)/validation_count))
 
-    train_people_list = distinct_people[:training_inx]
-    test_people_list = distinct_people[training_inx:]
+        logging.info('i: {}, Start index: {}, End index: {}'.format(
+            i, training_inx_start, training_inx_end
+        ))
 
-    logging.debug('Training people: {}'.format(train_people_list))
-    logging.debug('Testing people: {}'.format(test_people_list))
+        train_people_list = distinct_people[:training_inx_start] + distinct_people[training_inx_end:]
+        test_people_list = distinct_people[training_inx_start:training_inx_end]
 
-    training_dict, training_relation = build_training_matrix(
-        words, freq, people,
-        train_people_list, person_name
-    )
+        logging.debug('Training people: {}'.format(train_people_list))
+        logging.debug('Testing people: {}'.format(test_people_list))
 
-    testing_dict, testing_relation = build_testing_matrix(
-        words, freq, people,
-        test_people_list
-    )
+        training_dict, training_relation = build_training_matrix(
+            words, freq, people,
+            train_people_list, person_name
+        )
 
-    # output training matrix to file
-    train_filename = '{}.TRAIN'.format(re.search('<?(.*)>?', person_name).group(1))
-    export_csv(
-        filename=train_filename,
-        person=person_name,
-        word_list=list(training_dict.keys()),
-        people_list=train_people_list,
-        X=list(zip(*training_dict.values())),
-        Y=training_relation
-    )
-    # output testing matrix to file
-    test_filename = '{}.TEST'.format(re.search('<?(.*)>?', person_name).group(1))
-    export_csv(
-        filename=test_filename,
-        person=person_name,
-        word_list=list(testing_dict.keys()),
-        people_list=test_people_list,
-        X=list(zip(*testing_dict.values())),
-        Y=testing_relation
-    )
+        testing_dict, testing_relation = build_testing_matrix(
+            words, freq, people,
+            test_people_list
+        )
+
+        # output training matrix to file
+        train_filename = '{}.TRAIN.{}'.format(re.search('<?(.*)>?', person_name).group(1), i)
+        export_csv(
+            filename=train_filename,
+            person=person_name,
+            word_list=list(training_dict.keys()),
+            people_list=train_people_list,
+            X=list(zip(*training_dict.values())),
+            Y=training_relation
+        )
+        # output testing matrix to file
+        test_filename = '{}.TEST.{}'.format(re.search('<?(.*)>?', person_name).group(1), i)
+        export_csv(
+            filename=test_filename,
+            person=person_name,
+            word_list=list(testing_dict.keys()),
+            people_list=test_people_list,
+            X=list(zip(*testing_dict.values())),
+            Y=testing_relation
+        )
 
 
 def build_unsupervised_set(person_name):
@@ -302,15 +305,70 @@ def build_unsupervised_set(person_name):
     )
 
 
+def build_full_set(person_name):
+
+    select_words(person_name)
+
+    query_str = \
+        'match (w:Word)-[h:HEARD]-(p:Person) where w.active = True and ' \
+        '(p.address=\'{}\' or h.name=\'{}\') ' \
+        'return w.value, h.frequency, h.name, p.address'.format(person_name, person_name)
+    heard_words = db.query(query_str)
+    logging.info('Heard words query:\n{}'.format(query_str))
+
+    # Just show the person who is not known
+    heard_words = [[w[0], w[1], (w[2] if w[3] == person_name else w[3])] for w in heard_words]
+
+    logging.info('All heards: {}'.format(len(heard_words)))
+
+    # Merge operation to combine words sent and received
+    heard_words.sort()
+    for i in range(len(heard_words)-1):
+        h0, h1 = heard_words[i-1], heard_words[i]
+        if h0[0] == h1[0] and h0[2] == h1[2]:
+
+            logging.info('Merge: {}, {}'.format(heard_words[i], heard_words[i-1]))
+            h1[1] += h0[1]
+            h0[1] = h1[1]
+
+    # Deduplicate list, frequencies already added
+    heard_words = sorted(set(tuple(word) for word in heard_words))
+
+    logging.info('Unique heards: {}'.format(len(heard_words)))
+
+    logging.info('Unique words: {}'.format(len(list(set([w[0] for w in heard_words])))))
+
+    words, freq, people = list(zip(*heard_words))
+    distinct_people = list(set(people))
+
+    train_people_list = distinct_people
+    training_dict, training_relation = build_training_matrix(
+        words, freq, people,
+        train_people_list, person_name
+    )
+
+    # output training matrix to file
+    train_filename = '{}.ALL'.format(re.search('<?(.*)>?', person_name).group(1))
+    export_csv(
+        filename=train_filename,
+        person=person_name,
+        word_list=list(training_dict.keys()),
+        people_list=train_people_list,
+        X=list(zip(*training_dict.values())),
+        Y=training_relation
+    )
+
+
 if __name__ == '__main__':
 
     import sys
 
-    prepare_types = ['sup', 'unsup']
+    prepare_types = ['sup', 'unsup', 'full']
 
-    if len(sys.argv) != 4 or len(sys.argv) != 2:
+    if len(sys.argv) != 4:
         print("Error! Wrong number of input arguments. \n"
               "USAGE: prepare.py [NAME] --type [PREPARE TYPE: {}]".format(', '.join(prepare_types)))
+        sys.exit(1)
 
     p_type = sys.argv[3]
     name = sys.argv[1]
@@ -318,3 +376,5 @@ if __name__ == '__main__':
         build_training_and_testing_sets(name)
     elif p_type == 'unsup':
         build_unsupervised_set(name)
+    elif p_type == 'full':
+        build_full_set(name)

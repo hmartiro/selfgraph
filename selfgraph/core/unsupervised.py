@@ -8,7 +8,7 @@ from selfgraph.algorithms import k_means
 
 def execute_kmeans(data_filename, num_features):
     word_list, people_list, X = k_means.import_CSV(data_filename)
-    k_means.execute(X, num_features)
+    k_means.execute(X, num_features, people_list)
 
 
 def print_results(person, people, confusion):

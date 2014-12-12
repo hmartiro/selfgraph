@@ -13,14 +13,23 @@ def format_basic(s_in):
 def format_address(field):
 
     f = format_basic(field)
-    f = re.sub('[\n\r\t\"\'\\\(\)]', '', f)
-    f = f.split(',')
-    f = [entry.strip().lower() for entry in f]
+    f = re.sub('[\n\r\t\"\'\\\(\)=\?\-]', '', f)
 
-    while '' in f:
-        f.remove('')
+    formatted = []
+    for address in f.split(','):
 
-    return f
+        # Trim and lowercase
+        address = address.strip().lower()
+
+        # Change all whitespace to spaces
+        address = re.sub('\s', ' ', address)
+
+        formatted.append(address)
+
+    while '' in formatted:
+        formatted.remove('')
+
+    return formatted
 
 
 def format_text(text):

@@ -50,9 +50,25 @@ def update_not_an_alias(p_alias, p, not_an_alias):
         return
 
     if p in not_an_alias:
+
+        to_remove = dict()
+        to_add = dict()
+
         for person in not_an_alias[p]:
-            not_an_alias[person].remove(p)
-            not_an_alias[person].add(p_alias)
+
+            if person not in to_remove:
+                to_remove[person] = set()
+            if person not in to_add:
+                to_add[person] = set()
+
+            to_remove[person].add(p)
+            to_add[person].add(p_alias)
+
+        for person in to_remove:
+            not_an_alias[person] = not_an_alias[person].difference(to_remove[person])
+
+        for person in to_add:
+            not_an_alias[person] = not_an_alias[person].union(to_add[person])
 
         if p_alias not in not_an_alias:
             not_an_alias[p_alias] = set()

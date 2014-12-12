@@ -13,7 +13,7 @@ from selfgraph.core.alias import create_alias, update_relationships_with_alias
 
 db = GraphDB()
 
-MAX_WORDS_PER_MESSAGE = 1000
+MAX_WORDS_PER_MESSAGE = 500
 
 
 def load_data(data, range_inx=None, clear=False):
@@ -33,7 +33,14 @@ def load_data(data, range_inx=None, clear=False):
         db.clear()
 
     db.create_index('Person', 'address')
+    db.create_index('Person', 'alias')
     db.create_index('Word', 'value')
+    db.create_index('Word', 'active')
+
+    # TODO this doesn't work, indices are currently only for nodes
+    db.create_index('HEARD', 'name')
+    db.create_index('ROLE', 'category')
+    db.create_index('RELATION', 'category')
 
     messages_to_merge = set()
     words_to_merge = set()

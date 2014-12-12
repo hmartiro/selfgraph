@@ -22,17 +22,25 @@ def import_CSV(file_name):
     return word_list, people_list, X
 
 
-def execute(data, num_features):
-    reduced_data = PCA(n_components=2).fit_transform(data)
-    kmeans = KMeans(init='k-means++', n_clusters=2, n_init=10)
+def execute(data, num_features, people_list):
+    reduced_data = scale(data)
+    reduced_data = PCA(n_components=20).fit_transform(reduced_data)
+    kmeans = KMeans(init='k-means++', n_clusters=12, n_init=10)
     kmeans.fit(reduced_data)
 
     # plt.figure()
-    # plt.plot(reduced_data)
+    # plt.plot(reduced_data[:, 0], reduced_data[:, 1], 'ro')
+    # plt.plot(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], 'bo')
     # plt.show()
-    plt.plot([1,2,3,4], [1,4,9,16], 'ro')
-    plt.axis([0, 6, 0, 20])
-    plt.show()
+    #print(list(np.array(data)[8, :]))
+    print(kmeans.labels_)
+    from pprint import pprint
+    results = dict(zip(people_list, kmeans.labels_))
+    pprint(sorted(results.items(), key=lambda v: v[1]))
+
+    # plt.plot([1,2,3,4], [1,4,9,16], 'ro')
+    # plt.axis([0, 6, 0, 20])
+    # plt.show()
 
     #print(kmeans.cluster_centers_)
     # Step size of the mesh. Decrease to increase the quality of the VQ.

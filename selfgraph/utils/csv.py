@@ -4,7 +4,7 @@
 
 import csv
 import re
-
+import numpy as np
 
 def import_csv(filename):
 
@@ -13,11 +13,11 @@ def import_csv(filename):
         data = [row for row in reader]
 
     person = data[0][0]
-    word_list = data[1]
-    people_list = data[2]
+    word_list = np.array(data[1])
+    people_list = np.array(data[2])
 
-    Y = [int(row[0]) for row in data[3:]]
-    X = [[int(x) for x in row[1:]] for row in data[3:]]
+    Y = np.array([int(row[0]) for row in data[3:]])
+    X = np.array([[int(x) for x in row[1:]] for row in data[3:]])
 
     return person, word_list, people_list, X, Y
 

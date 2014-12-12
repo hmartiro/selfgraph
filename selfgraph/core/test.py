@@ -1,7 +1,11 @@
 """
 
 """
+import numpy as np
 from py2neo import neo4j
+from sklearn import cross_validation
+from sklearn import svm
+
 from selfgraph.algorithms import linearSVC, naive_bayes
 from selfgraph.utils.csv import import_csv
 from selfgraph.core.categories import RELATIONS
@@ -48,9 +52,9 @@ def test_SVM(train_name, test_name):
     person, words, train_people, X, Y = import_csv(train_name)
     person, words, test_people, X_test, Y_test = import_csv(test_name)
 
-    lin_clf = linearSVC.train(X, Y)
+    lin_clf, pca = linearSVC.train(X, Y)
 
-    Y_test = linearSVC.test(lin_clf, X_test)
+    Y_test = linearSVC.test(lin_clf, pca, X_test)
     linearSVC.output_results(test_people, Y_test)
 
     confusion = confusion_matrix(person, test_people, Y_test)
@@ -63,7 +67,6 @@ def confusion_matrix(person, people, Y):
     print('Confusion matrix for classifying {} people in relation to [{}]:'.format(
         len(people), person
     ))
-    print(Y)
 
     query_str = 'match (p:Person {{address: \'{}\'}})-[r:RELATION]-(p1:Person) ' \
                 'return p1.address, r.category'.format(person)
@@ -120,7 +123,10 @@ def print_results(person, people, confusion):
     print('Error rate: {}'.format(error))
 
 
+
+
 if __name__ == '__main__':
+
     import sys
 
     algo_names = ['nb', 'linSVC']
@@ -133,9 +139,40 @@ if __name__ == '__main__':
     train_name = sys.argv[2]
     test_name = sys.argv[3]
 
-    if algorithm == 'nb':
-        print_results(*test_naive_bayes(train_name, test_name))
-    elif algorithm == 'linSVC':
-        print_results(*test_SVM(train_name, test_name))
-    else:
-        print("{} is not a valid algorithm name. Valid names are: {}".format(', '.join(algo_names)))
+    test_cross_validation(train_name)
+
+    # validation_count = 5
+    # categories = 2
+    #
+    # results = []
+    # for i in range(validation_count):
+    #
+    #     if algorithm == 'nb':
+    #         person, people_list, confusion = test_naive_bayes(
+    #             '{}.{}'.format(train_name, i), '{}.{}'.format(test_name, i)
+    #         )
+    #     elif algorithm == 'linSVC':
+    #         person, people_list, confusion = test_SVM(
+    #             '{}.{}'.format(train_name, i), '{}.{}'.format(test_name, i)
+    #         )
+    #     else:
+    #         raise Exception("{} is not a valid algorithm name. Valid names are: {}".format(', '.join(algo_names)))
+    #
+    #     results.append((person, people_list, confusion))
+    #
+    # person = results[0][0]
+    # people_list_total = []
+    # confusion_total = None
+    #
+    # for person, people_list, confusion in results:
+    #
+    #     people_list_total.extend(people_list)
+    #
+    #     if not confusion_total:
+    #         confusion_total = confusion
+    #     else:
+    #         for key, value in confusion.items():
+    #             for i, entry in enumerate(value):
+    #                 confusion_total[key][i] += entry
+    #
+    # print_results(person, people_list_total, confusion_total)
