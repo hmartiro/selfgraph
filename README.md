@@ -27,7 +27,8 @@ graph database, the [scikit-learn](http://scikit-learn.org/) machine
 learning package, and the [nltk](http://www.nltk.org/) NLP library.
 
 **Note:** Selfgraph is a command-line tool and pre-alpha.
-Contact the authors if you are interested in trying it out.
+Contact the authors if you are interested in trying it out. Currently,
+only email data is supported.
 
 ### Paper
 Selfgraph started as a final project for
