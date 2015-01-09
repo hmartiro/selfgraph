@@ -26,8 +26,8 @@ Selfgraph is written in Python 3, and uses the [neo4j](http://neo4j.com/)
 graph database, the [scikit-learn](http://scikit-learn.org/) machine
 learning package, and the [nltk](http://www.nltk.org/) NLP library.
 
-Note: Selfgraph is a command-line tool and pre-alpha.
-Contact the authors if you are interested.
+**Note:** Selfgraph is a command-line tool and pre-alpha.
+Contact the authors if you are interested in trying it out.
 
 ### Paper
 Selfgraph started as a final project for
