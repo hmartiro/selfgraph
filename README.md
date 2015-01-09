@@ -53,3 +53,11 @@ with the following abstract:
 	contacts. The study shows promising results and suggests future work that
 	incorporates message meta-data, other mediums of communication like text
 	messaging, and larger data sets to further improve accuracy.
+
+Results of various classifiers (in order of accuracy):
+ * Logistic regression (94.1%)
+ * Logistic regression w/ stochastic gradient descent (93.4%)
+ * SVM w/ linear kernel (93.1%)
+ * SVM w/ exponential kernel (92.5%)
+ * Ridge classifier (92.5%)
+ * Multinomial naive bayes (91.5%)
