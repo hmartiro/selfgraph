@@ -4,6 +4,8 @@ Selfgraph builds a social graph of your own personal network from your
 communications with others, and applies machine learning techniques to
 provide insights about your network.
 
+![Word Node Subgraph](documents/fig-1-screenshot.png?raw=true)
+
 You input bulk email, SMS, or
 WhatsApp data, and selfgraph constructs a complex graph database of your
 interactions with others. Selfgraph provides visualizations and algorithms
@@ -18,7 +20,7 @@ do more computationally intense calculations per-person than a server could,
 because it runs entirely on your machine. This means that unlike
 [Immersion](https://immersion.media.mit.edu/) from the MIT Media Lab, we
 process the full content of your communications, not just
-the metadata. We process every individual word communicated into our graph.
+the metadata. We feed every individual word communicated into our graph.
 
 Selfgraph is written in Python 3, and uses the [neo4j](http://neo4j.com/)
 graph database, the [scikit-learn](http://scikit-learn.org/) machine
