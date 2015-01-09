@@ -63,7 +63,7 @@ def format_text(text):
     # Replace all forward message headers
     text = re.sub('on ([\w]+, )?[\w]+ [\d]+, [\d]+(,)? (at )?[\d]+:[\d]+(,)? .*? wrote:', 'forward', text)
 
-    #Replace all email addresses (very crude)
+    # Replace all email addresses (very crude)
     text = re.sub('[\S]+@[\S]+', 'email', text)
 
     # Replace all times

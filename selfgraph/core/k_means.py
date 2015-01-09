@@ -12,15 +12,6 @@ from sklearn.datasets import load_digits
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import scale
 
-from selfgraph.utils.csv import import_csv
-
-
-def import_CSV(file_name):
-
-    person, word_list, people_list, X, Y = import_csv(file_name)
-
-    return word_list, people_list, X
-
 
 def execute(data, num_features, people_list):
     reduced_data = scale(data)

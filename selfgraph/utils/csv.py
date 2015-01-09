@@ -3,8 +3,8 @@
 """
 
 import csv
-import re
 import numpy as np
+
 
 def import_csv(filename):
 
